@@ -1,0 +1,381 @@
+---
+title: "Tidyverse examples"
+author: "STAT215A Fall 2019 Week 1"
+output: html_document
+date: "9/5/2019"
+---
+
+
+```{r setup, echo = FALSE, message = FALSE, warning = FALSE}
+# set global knitr options
+knitr::opts_chunk$set(
+  echo = TRUE,
+  warning = FALSE,
+  message = FALSE,
+  cache = FALSE)
+
+# load in libraries
+# install.packages("tidyverse")  # if you haven't installed tidyverse before
+library(tidyverse)
+
+# set seed
+set.seed(1)
+```
+
+This is an introduction to the basic functions in tidyverse, which contains multiple libaries that are useful for manipulating and plotting data in R. 
+
+# dyplr
+## piping 
+Piping is a way to chain functions together to avoid redefining variables. Below, we look at the head of the iris data frame using piping.
+```{r piping}
+# without using piping
+head(iris)
+
+# produces same result but with piping
+iris %>% head()
+```
+
+We can also use multiple pipes in a single line of code. In the below example, we count the number of observations in each species using multiple pipes.
+
+```{r piping2}
+
+# without piping
+iris_by_species <- group_by(iris, Species)
+summarise(iris_by_species, n = n())
+
+# produces same result but with piping
+iris %>%
+  group_by(Species) %>%
+  summarise(n = n())
+
+```
+
+**Exercise 1.** Rewrite the following code chunk using the pipe opertor.
+
+```{r ex-piping}
+log_petal_length <- log(iris$Sepal.Length)
+min(log_petal_length)
+
+## exercise 1: rewrite with pipe operator here
+
+
+```
+
+
+
+## filter
+Now, we look at ```filter()```, which finds rows where the specified condition is true and returns those rows as a data frame. Here, we use ```filter()``` to get only the rows in the data frame that are from the versicolor species.  
+
+```{r filter}
+# using filter() without piping
+head(filter(iris, Species == "versicolor"))
+
+# same thing but using piping instead
+iris %>% 
+  filter(Species == "versicolor") %>% 
+  head()
+
+# check dimension of data frame
+iris %>% 
+  filter(Species == "versicolor") %>% 
+  dim()
+```
+
+Instead of just filtering out one species, we could look at all observations that are versicolor as well as setosa.  
+
+```{r filter_two}
+# save all rows that are veriscolor of setosa 
+iris %>% 
+  filter(Species %in% c("versicolor", "setosa")) %>% 
+  head()
+
+# check dimension of data frame
+iris %>% 
+  filter(Species %in% c("versicolor", "setosa")) %>% 
+  dim()
+```
+
+
+**Exercise 2.** How many observations have sepal length in the upper 50\% quantile and petal width greater than 2?
+
+```{r ex-filter}
+## exercise 2 solution here
+
+
+```
+
+Note that there are also variants of ```filter()``` named ```filter_if()```, ```filter_all()```, and ```filter_at()```. If you run ```? filter_if()```, you can learn more about these variants and see examples of how to use these functions.
+
+## select
+We next look at ```select()```, which keeps or removes only certain variables (selecting columns of the data frame whereas before we were filtering by row). Below, we use ```select()``` to keep only the columns that contain the species and sepal length information.
+
+```{r select}
+iris %>% 
+  filter(Species == "versicolor") %>% 
+  select(Sepal.Length, Species) %>% 
+  head()
+```
+
+We can also select all the columns except for sepal length by typing
+
+```{r select_multiple}
+iris %>% 
+  filter(Species == "versicolor") %>% 
+  select(-Sepal.Length) %>% 
+  head()
+```
+
+It is often useful to combine ```select()``` with ```rename()``` to modify the selected column names.
+
+```{r select_rename}
+iris %>%
+  select(Sepal.Length, Sepal.Width) %>%
+  rename(Length = Sepal.Length,
+         Width = Sepal.Width) %>%
+  head()
+```
+
+**Exercise 3.** If you wanted to extract all columns in the data frame below that had the word "Length" in the column name, how would you go about doing this without explicitly typing the names of each individual column that you want? (Hint: The help page for ```select_helpers``` may be useful.)
+
+```{r ex-select}
+# create fake dataset (please run lines)
+idx <- sample(1:100, 25)  # generate random indices
+cols <- c(paste0("Length", idx), paste0("Width", idx)) %>%  # generate column ids
+  sample(., size = 50, replace = F)  # reorder column ids
+data <- matrix(rnorm(500), nrow = 10, ncol = 50) %>%
+  as.data.frame() %>%
+  setNames(cols)
+
+# view structure of data
+str(data[, 1:10])
+
+## exercise 3 solution here
+
+
+```
+
+
+There are also variants of ```select()``` named ```select_if()```, ```select_all()```, and ```select_at()```. If you run ```? select_if()```, you can learn more about these variants and see examples of how to use these functions. Below, we show how to use ```select_if()``` to select all columns that are numeric.
+
+```{r select_if}
+iris %>%
+  select_if(is.numeric) %>%
+  head()
+```
+
+
+**Exercise 4.** Extract the second column of the ```iris``` dataset using ```select()```. Next, extract the second column of the ```iris``` dataset using ```pull()```. What is the difference between ```select()``` and ```pull()```?
+
+```{r ex-select-pull}
+## exercise 4 solution here
+
+
+```
+
+
+
+## mutate
+```mutate()``` is a function which creates new variables consisting of functions of existing variables. We will first use ```mutate()``` to create a new variable that is the sum of sepal length and sepal width.
+
+```{r mutate_sum}
+# mutate without piping
+iris_vc <- iris[iris$Species == "versicolor", ]
+iris_vc$Sepal.Sum <- iris_vc$Sepal.Width + iris_vc$Sepal.Length
+head(iris_vc)
+  
+# mutate with piping
+iris %>% 
+  filter(Species == "versicolor") %>% 
+  mutate(Sepal.Sum = Sepal.Length + Sepal.Width) %>% 
+  head()
+```
+
+Like ```select()```, ```mutate()``` also has the close variants ```mutate_if()```, ```mutate_at()```, and ```mutate_all()```. Next, we use ```mutate_at()``` to multiply each Sepal.length and Sepal.Width by 2. 
+
+```{r mutate_multiple}
+iris %>% 
+  filter(Species == "versicolor") %>% 
+  mutate_at(vars(contains("Sepal")), list(~ 2 * .)) %>% 
+  head()
+```
+
+
+**Exercise 5.** Using the ```iris_new``` dataset, convert all character columns into factors using ```mutate_if()```.
+
+```{r ex-mutate}
+# create iris_new dataset
+iris_new <- iris %>%
+  rownames_to_column("id") %>%
+  mutate(Species = as.character(Species))
+
+# look at structure of iris_new
+str(iris_new)
+
+## exercise 5 solution here: convert character columns to factors
+
+
+```
+
+
+## group_by and summarize
+ ```group_by()``` is a function that changes from operating on the entire dataset to operating on it group-by-group. ```summarize()``` allows us to summarize the group into a single value.  Next, we group the dataset by species and compute the mean and median sepal length for each species.
+
+```{r group_by}
+iris %>% 
+  group_by(Species) %>%  
+  summarise(Sepal.Length.mean = mean(Sepal.Length),
+            Sepal.Length.median = median(Sepal.Length))
+```
+
+
+**Exercise 6.** For each species, randomly select half of the observations and compute the $25^{th}$ quartile for each feature (i.e., ```Sepal.Length```, ```Sepal.Width```, ```Petal.Length```, and ```Petal.Width```). Hint: see ```? sample_frac```
+
+```{r ex-group_by}
+## exercise 6 solution here
+
+
+```
+
+
+## arrange
+```arrange()``` is a function for ordering rows in a data.frame (or tibble) based upon some expression involving its variables/columns. By default, ```arrange()``` orders the rows based upon increasing order of the specified column (in the example, by petal length).
+
+```{r arrange}
+iris %>%
+  arrange(Petal.Length) %>%
+  head()
+```
+
+We can also arrange by multiple columns and by decreasing order of column(s). In the example below, we order the rows first by decreasing petal length and then by increasing sepal width (if there are ties among petal length).
+
+```{r arrange2}
+iris %>%
+  arrange(desc(Petal.Length), Sepal.Width) %>%
+  head()
+```
+
+
+**Exercise 7.** For each species, only keep the observations with the largest 10 sepal lengths. Then, sort the rows in order of decreasing sepal length. Hint: see ```? top_n```
+
+```{r ex-arrange}
+## exercise 7 solution here
+
+
+```
+
+## More dplyr
+
+Beyond the functions discussed previously, there are a few other \texttt{dplyr} functions that can be quite useful when cleaning and working with real data. For instance, suppose you need to merge two datasets based upon some designated id column. There are several ways to merge or join two datasets. See the help page for ```dplyr::join``` to learn about the various ways of joining two datasets. The most common ways are to use ```inner_join()```, ```left_join()```, ```right_join()```, or ```full_join()```. Below, we will use ```left_join()``` to merge the two play datasets based upon the ```id``` column.
+
+```{r left_join}
+
+lowercase_data <- data.frame(id = 1:6, lower = letters[1:6])
+uppercase_data <- data.frame(id = 5:1, upper = LETTERS[5:1])
+lowercase_data
+uppercase_data
+
+left_join(x = lowercase_data, y = uppercase_data, by = "id")
+
+```
+
+**Exercise 8.** Using the ```lowercase_data``` and ```uppercase_data``` from the previous code chunk, merge the two datasets so that only rows with ```id``` matches in both datasets are kept. In other words, the resulting merged dataset should only include observations with ```id``` $= 1, \dots, 5$.
+
+```{r ex-join}
+## exericse 8 solution here
+
+
+```
+
+
+**Exercise 9.** The purpose of this exercise is to introduce a couple useful (but perhaps not well-known) functions for data cleaning. In the following ```iris_messy``` dataset, some rows are duplicates of another row, and some other rows have missing values. Delete both the rows with missing values and the duplicated rows. Hint: this can be easily done with two simple \texttt{dplyr} functions.
+
+```{r ex-messy}
+# add messiness to the iris data (please run)
+iris_messy <- rbind(
+  iris,
+  iris %>% sample_n(size = 50, replace = T)  # add duplicates
+) %>%
+  slice(sample(1:n()))  # randomly shuffle rows
+iris_messy[sample(1:nrow(iris_messy), size = nrow(iris_messy) / 4), 
+           "Species"] <- NA  # randomly add NAs to Species column
+# sum(is.na(iris_messy))
+# summary(iris_messy)
+
+
+## exercise 9 solution here
+
+
+```
+
+
+# tidyr
+tidyr contains functions for changing the shape of the data, allowing you to transition columns into rows and rows into columns.  The two main functions are ```spread()``` and ```gather()```, which can be viewed as inverses of each other.
+
+## gather
+```gather()``` converts data from wide format to long format.
+
+```{r gather}
+# wide to long
+iris_long <- iris %>% 
+  rownames_to_column("id") %>%
+  gather(key = "Variable", value = "Value", -Species, -id)
+
+# top 
+head(iris_long)
+
+# bottoms
+tail(iris_long)
+
+# overall structure
+str(iris_long)
+```
+
+
+## spread
+
+```spread()``` converts data from long format to wide format
+```{r spread}
+# long to wide
+iris_wide <- iris_long %>% 
+  gather(key = "Variable", value = "Value")
+
+# top 
+head(iris_wide)
+
+# bottoms
+tail(iris_wide)
+
+# overall structure
+str(iris_wide)
+```
+
+
+**Exercise 10.** Currently, the ```mtcars``` dataset is in wide format. Remove the ```cyl```, ```vs```, ```am```, ```gear```, and ```carb``` columns. Then create an ```id``` column containing the rownmaes. Finally, with the ```id``` column as the ```key``` and all other features as values, put the wide ```mtcars``` dataset into long format. Name the resulting data frame ```mtcars_long```.
+
+```{r ex-tidyr}
+
+str(mtcars)
+
+## exercise 10 solution here
+
+
+```
+
+# ggplot2
+
+We will get some practice with ```ggplot()``` next time, but if you've made it this far, take a look at the following:
+
+**Challenge Exercise.** ```gather()``` can be particularly useful in conjunction with ```ggplot()``` and ```facet_grid()``` or ```facet_wrap()```. Using the ```mtcars_long``` dataset you created in the previous exercise along with ```ggplot()``` and ```facet_wrap()```, plot a histogram of the values for each variable. In other words, you should end up with one histogram for each of ```disp```, ```drat```, ```hp```, ```mpg```, ```qsec```, and ```wt```.
+
+```{r ex-ggplot}
+## challenge exercise solution here
+
+
+```
+
+
+
+
+
+
+
