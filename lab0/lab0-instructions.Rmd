@@ -1,7 +1,8 @@
 ---
 title: "Lab 0"
-author: James Duncan (based on materials by Tiffany Tang, Zoe Vernon, Rebecca Barter, Yuval Benjamini, Jessica Li, Adam Bloniarz,
-  and Ryan Giordano)
+author: |
+  | James Duncan (based on materials by Tiffany Tang, Zoe Vernon, Rebecca Barter, Yuval
+  | Benjamini, Jessica Li, Adam Bloniarz, and Ryan Giordano)
 date: "Due 9/4/2020"
 output:
   pdf_document: default
