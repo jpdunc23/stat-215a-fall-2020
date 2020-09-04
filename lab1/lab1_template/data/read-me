@@ -1,0 +1,23 @@
+A Macroscope in the Redwoods
+Original Data
+
+mote-location-data.txt
+  - Location of each mote within the 2 trees
+
+sonoma-dates.m.gz 
+  - 2 Matlab arrays representing the date/time of each sample epoch
+
+sonoma-data-net.csv.gz
+  - Data retrieved over the wireless network
+    Header describes the columns
+
+sonoma-data-log.csv.gz
+  - Data retrieved from the flash logs after the deployment
+
+sonoma-data-all.csv.gz
+  - The above two data files combined into one for processing
+
+Gilman Tolle
+<get@cs.berkeley.edu>
+
+

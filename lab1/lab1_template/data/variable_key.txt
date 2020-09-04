@@ -1,0 +1,13 @@
+result time time the measurement was taken
+epoch	id numbers for each measurement time 
+nodeid	numbers for nodes
+parent	network structure
+voltage	voltage
+depth	network structure
+humidity	humidity
+humid_temp	temperature
+humid_adj	?
+hamatop	Incident PAR (sensor on the top) — direct sunlight
+hamabot	Reflected PAR (sensor on the bottom) 
+
+Is reflected PAR ever larger than Incident PAR?

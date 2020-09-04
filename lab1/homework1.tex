@@ -1,0 +1,87 @@
+%% LyX 2.2.3 created this file.  For more info, see http://www.lyx.org/.
+%% Do not edit unless you really know what you are doing.
+\documentclass[english]{article}
+\usepackage[T1]{fontenc}
+\usepackage[latin9]{inputenc}
+\usepackage{geometry}
+\geometry{verbose,tmargin=1in,bmargin=1in,lmargin=1in,rmargin=1in}
+\usepackage{fancyhdr}
+\pagestyle{fancy}
+\setlength{\parskip}{\smallskipamount}
+\setlength{\parindent}{0pt}
+\usepackage{url}
+\usepackage{enumitem}
+\usepackage{amsmath}
+\usepackage{amsthm}
+
+\makeatletter
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% Textclass specific LaTeX commands.
+\numberwithin{equation}{section}
+\numberwithin{figure}{section}
+\newlength{\lyxlabelwidth}      % auxiliary length 
+
+\@ifundefined{date}{}{\date{}}
+\makeatother
+
+\usepackage{babel}
+\begin{document}
+
+\title{Homework 1\linebreak{}
+Stat 215A, Fall 2020}
+\maketitle
+\begin{center}
+\textbf{Due:} push a \texttt{homework1.pdf} file to your \texttt{stat-215-a} GitHub repo by \textbf{Thursday, September 17 11:59pm} \\
+\par\end{center}
+
+\section{Hypothesis testing, the $t$-distribution}
+
+Imagine we observe $(x_{1},y_{1}),\ldots,(x_{n},y_{n})$ where $(x_{i},y_{i})$
+are multivariate normal with mean $(\mu_{x},\mu_{y})$, $Var(x_{i})=Var(y_{i})=\sigma^{2}$
+and correlation $\rho$. We are interested in testing the null hypothesis
+that $\mu_{x}=\mu_{y}$.
+
+Under the null hypothesis we know 
+\[
+t=\frac{(\bar{x}-\bar{y})}{s_{pooled}\sqrt{2/n}}
+\]
+is distributed as a Student's $t$ with $2n-2$ degrees of freedom, where $s_{pooled}$ is the pooled sample standard deviation. See any
+undergraduate text (or Wikipedia page ``Student's t-test'')
+if you are unfamiliar with the $t$ distribution.
+\begin{enumerate}
+\item Write $s_{pooled}$ in terms of $x_{i},y_{i},\bar{x}$ and $\bar{y}$
+(this is a standard definition)
+\item What is the expectation of $s_{pooled}^{2}$? 
+\item The statement above (on the t-statistic) isn't quite right. Are any
+additional assumptions needed? 
+\end{enumerate}
+Consider doing a paired t-test with the same data. The test statistic
+here is 
+\[
+t_{paired}=\frac{(\bar{x}-\bar{y})}{s_{\textit{diff}}\sqrt{1/n}}.
+\]
+\begin{enumerate}[resume]
+\item Write $s_{\textit{diff}}$ in terms of $x_{i},y_{i},\bar{x}$ and
+$\bar{y}$. (another standard definition)
+\item What distribution does $t_{paired}$ have?
+\item What is the expectation of $s_{\textit{diff}}^{2}$? 
+\item Compare $s_{\textit{diff}}^{2}\frac{1}{n}$ to $s_{pooled}^{2}\frac{2}{n}$.
+When is $s_{\textit{diff}}^{2}\frac{1}{n}<s_{pooled}^{2}\frac{2}{n}$?
+When is $E(s_{\textit{diff}}^{2}\frac{1}{n})<E(s_{pooled}^{2}\frac{2}{n})$? 
+\item From these computations, what do you learn? 
+\end{enumerate}
+
+\section{Questions from Freedman}
+
+In Freedman, do questions 1 - 5 and 9 starting on page 13. This may
+sound like a lot of work. However, once you do the reading, each question
+should have a straight-forward answer.
+
+Please look into the following map: \url{http://www.ph.ucla.edu/epi/snow/snowmap1_1854_lge.htm}.
+This is the map made by John Snow regarding the Broad Street pump.
+Each small block marks a cholera patient.
+\begin{itemize}
+\item How would you transform this display into numerical measures? 
+\item What would be gained quantifying the effects? What would be lost? 
+\end{itemize}
+
+\end{document}

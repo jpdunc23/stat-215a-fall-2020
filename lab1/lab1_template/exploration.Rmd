@@ -1,0 +1,153 @@
+---
+title: "A place for exploration of the data"
+author: "Rebecca Barter"
+date: "8/31/2017"
+output: html_document
+---
+
+Do not submit this document with your lab! This is an optional place for creating *exploratory* plots (you will create polished, *explanatory* plots in the lab). The plots here are ugly and far from publication quality, but they are very useful for understanding the data.
+
+# Load the data
+
+```{r echo = FALSE, message=FALSE, warning=FALSE}
+library(knitr)
+library(tidyverse)
+library(stringr)
+library(lubridate)
+
+source("R/load.R")
+source("R/clean.R")
+```
+
+```{r echo = FALSE}
+
+# load the dates data
+dates_orig <- loadDatesData(path = "data/")
+# clean the dates data
+dates <- cleanDatesData(dates_orig)
+
+# load the redwood sensor data
+redwood_all_orig <- loadRedwoodData(path = "data/", source = "all")
+redwood_net_orig <- loadRedwoodData(path = "data/", source = "net")
+redwood_log_orig <- loadRedwoodData(path = "data/", source = "log")
+# clean the redwood sensor data
+
+# ...
+```
+
+Note that the files `load.R` and `clean.R` contain functions for loading and cleaning the data.
+
+# Exploring pairwise relationships
+
+Here, I make a few scatterplots to explore the data. Notice that have multiple `humid` variables. It might be a good idea to spend some time exploring these to understand what they mean. 
+
+## Exploring humidity
+
+First, I plot `humidity` against `humid_temp` and find that there is a big blob of data with values close to zero, as well as some weird outlying values. Since neither humidity nor temperature should ever be negative or on the scale of hundreds or thousands, it should be fairly obvious that these are measurement errors.
+
+
+```{r echo = FALSE, warning=FALSE, message=FALSE}
+# This takes a long time.
+ggplot(redwood_log_orig) + geom_point(aes(x = humidity, y = humid_temp))
+```
+
+Should you remove the outliers? Try plotting the blob by itself (ignoring the outliers).
+
+## Exploring hamatop and hamabot
+
+Next, I explore the `hamatop` and `hamabot` variables. Again, I see a blob with values close to zero and a couple of extreme outliers.
+
+```{r echo = FALSE, warning=FALSE, message=FALSE}
+# hamatop vs hamabot
+ggplot(redwood_log_orig) + 
+  geom_point(aes(x = hamatop, y = hamabot))
+```
+
+What happens if I color each point by humidity? The plot below shows that the outlying points have bizarely high humidity values. It will probably be okay to remove them...
+
+
+```{r echo = FALSE}
+# hamatop vs temperature, humidity as color.
+ggplot(redwood_log_orig) + 
+  geom_point(aes(x = hamatop, y = humid_temp, color = humidity))
+```
+
+
+# Exploring nodes
+
+There are 72 unique nodes in the data. Theoretically they will all have the same number of measurements. The table below shows that this is clearly not the case!
+
+
+```{r echo = FALSE}
+# Next, pick a few nodes, and inspect their time series.
+redwood_log_orig %>%
+  count(nodeid) %>%
+  kable
+```
+
+Next, I explore a temperature time series for a single node.
+
+```{r echo = FALSE}
+redwood_log_orig %>%
+  filter(nodeid == 105) %>%
+  ggplot() + 
+  geom_point(aes(x = epoch, y = humid_temp))
+```
+
+I can make this plot a little fancier by plotting three variables at once. Since they are all on different scales, I need to normalize them to have the same scale (between 0 and 1). To create this kind of plot, I need to convert the data into long form. For information on what this means, see http://swcarpentry.github.io/r-novice-gapminder/14-tidyr/.
+
+```{r echo = FALSE}
+# A little fancier.
+Normalize <- function(x) {
+  return((x - min(x)) / (max(x) - min(x))) 
+}
+# create a long-form data frame with epoch as id
+node_long <- redwood_log_orig %>%
+  filter(nodeid == 105) %>%
+  select(epoch, voltage, humidity, humid_temp) %>%
+  mutate(voltage = Normalize(voltage),
+         humidity = Normalize(humidity),
+         humid_temp = Normalize(humid_temp)) %>%
+  # convert to long-form
+  gather(key = "variable", value = "normalized value", -epoch) 
+
+# plot each variable
+ggplot(node_long) + 
+  geom_point(aes(x = epoch, y = `normalized value`)) + 
+  facet_grid(~variable)
+
+```
+
+
+Perhaps you can try combining the redwoods datasets. Do the "net" and "log" datasets have the same nodeid and epoch combinations? Does the "all" dataset really correspond to a combination of the "net" and "log" datasets?
+
+One exercise to test this is to do the following: for each nodeid/epoch combo in net, find the corresponding row in log. If there is one, keep the row, otherwise return NA.
+
+
+
+
+
+# humitidy vs temperature
+
+```{r echo = FALSE}
+redwood_all_orig %>% 
+  sample_frac(0.2) %>%
+  filter(humid_temp < 40, humid_temp > 0) %>%
+  ggplot() +
+  geom_point(aes(x = humid_temp, y = humidity))
+```
+
+
+
+```{r echo = FALSE}
+redwood_all_orig %>% 
+  sample_frac(0.08) %>%
+  mutate(time = hour(as_datetime(result_time))) %>%
+  filter(humid_temp < 40, humid_temp > 0) %>%
+  ggplot() +
+  geom_point(aes(x = humidity, y = humid_temp, col = as.numeric(time)),
+             alpha = 0.2)
+```
+
+
+
