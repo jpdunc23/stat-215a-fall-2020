@@ -1,0 +1,69 @@
+---
+title: "Discussion Week 2"
+author: "James Duncan"
+date: "`r format(Sys.time(), '%B %d, %Y')`"
+output: pdf_document
+---
+
+```{r setup, echo = FALSE, warning = FALSE, message = FALSE}
+# set knitr options globally
+knitr::opts_chunk$set(
+  echo = FALSE,  # don't print code
+  warning = FALSE,  # don't print warnings
+  message = FALSE  # don't print messages
+)
+```
+
+# `across()`
+
+See https://dplyr.tidyverse.org/articles/colwise.html
+
+`across()` supersedes scoped verbs like `mutate_at()`.
+
+```{r across_vs_mutate_at}
+library(dplyr)
+
+# mutate + across
+iris %>%
+  mutate(across(.cols = contains("Sepal"), ~ 2 * .x)) %>%
+  head()
+
+# mutate_at
+iris %>%
+  mutate_at(vars(contains("Sepal")), list(~ 2 * .)) %>%
+  head()
+
+```
+
+It enables nice summaries:
+
+```{r across_plus_summarize}
+# mutate + across
+iris %>%
+  summarize(
+    across(where(is.numeric), mean),
+    across(where(is.factor), nlevels),
+  )
+```
+
+But it can make some syntax more convoluted:
+
+```{r across_plus_summarize}
+# mutate + across
+mtcars %>% mutate_all(mean)
+# ->
+mtcars %>% mutate(across(everything(), mean))
+```
+
+# `here()`
+
+```{r here_example}
+getwd()
+library(here)
+# find your here: it should be the top directory of this repo
+# if not, you may have to use set_here()
+here()
+here("week2", "data", "mtcars.rds")
+mtcars2 <- readRDS(here("week2", "data", "mtcars.rds"))
+head(mtcars2)
+```
