@@ -1,0 +1,309 @@
+---
+title: "Gapminder In-Class Lab"
+date: "`r format(Sys.time(), '%B %d, %Y')`"
+bibliography: bibliography.bib
+header-includes:
+   - \usepackage{float}
+   - \usepackage{hyperref}
+   - \usepackage{tcolorbox}
+   - \hypersetup{colorlinks, 
+                 urlcolor = blue,
+                 linkcolor = black, 
+                 citecolor = black}
+output: 
+  pdf_document:
+    citation_package: natbib
+    number_sections: true
+---
+
+\setlength{\abovedisplayskip}{-3mm}
+\setlength{\belowdisplayskip}{1mm}
+
+# Introduction {#sec:intro}
+
+\href{https://www.gapminder.org/}{Gapminder} is an excellent organization aimed at increasing the use and understanding of statistics on a number of global topics. They collect a variety of data from many sources and aim to produce fact-based statistics reflecting the current state of our world. In addition, Gapminder has developed easily-accessible \href{https://www.gapminder.org/tools/#$chart-type=bubbles}{tools} for visualizing the data in creative and informative ways.
+
+The data we will be exploring throughout this in-class guide consists of population, life expectency, and GDP information for many countries over time. If you would like to download this data yourself, click \href{https://raw.githubusercontent.com/resbaz/r-novice-gapminder-files/master/data/gapminder-FiveYearData.csv}{here}. This data can also be pulled from the class GitHub repository.
+
+In this in-class lab, our aims will be two-fold: 
+\begin{enumerate}
+\item to gain some experience making visualizations with \texttt{ggplot()}, and
+\item to illustrate little-known tips and tricks in R Markdown which can make life far easier.
+\end{enumerate}
+
+\textbf{Tip:} Outside of the code chunks, we can use markdown and latex like normal. We can cross-referencing to different sections (e.g., Section \ref{sec:intro}), add bullet points, write in-line math equations (e.g., $\sqrt{25} + \frac{1}{2}$), longer math equations, etc.
+\begin{align*}
+(\alpha + \beta)^2 &= \alpha^2 + \alpha \beta + \beta \alpha + \beta^2 \\
+&= \alpha^2 + 2 \alpha \beta + \beta^2
+\end{align*}
+
+We will begin this in-class lab by loading and cleaning the data in Section \ref{sec:data}. In Section \ref{sec:viz}, we will proceed to visualize the data in various ways.
+
+\textbf{Tip:} In the first code chunk, you can set global knitr options that will serve as the default settings for all subsequent code chunks.
+
+```{r setup, echo = TRUE, warning = FALSE, message = FALSE}
+# setting default knitr options (this will save you typing; this way, you no
+# longer have to set echo = FALSE in the header of every code chunk to avoid
+# printing the code)
+knitr::opts_chunk$set(
+  echo = FALSE,  # don't print the code chunk
+  warning = FALSE,  # don't print warnings
+  message = FALSE,  # don't print messages
+  fig.width = 6,  # set default width of figures
+  fig.height = 4,  # set default height of figures
+  fig.align = "center",  # always align figure in center
+  fig.pos = "H",  # always plot figure at the exact location of the code chunk
+  cache = FALSE)
+# setting cache = TRUE will save the output of the evaluated code chunk locally
+# so that when you knit the file in the future, Rmd does not re-evaluate the
+# code chunk if the code chunk has not changed from the previous knit. This can
+# save time (particularly if your code is computationally expensive), but this
+# may lead to obscure errors - e.g., if you update an external file such as
+# load.R, then Rmd may not recognize that clean.R has changed and will not
+# update clean.R. This caveat should not deter you from setting cache = T. It is
+# just good to keep in mind (and for debugging)
+
+# load useful libraries
+library(here)
+library(tidyverse) # see week1
+library(knitr) # dynamic doc generation, improves upon Sweave()
+library(R.utils) # helpful extras (e.g. sourceDirectory)
+library(kableExtra) # for nice tables
+```
+
+# Data {#sec:data}
+
+Let's begin by loading and cleaning the data. To improve readability and modularity, I have written two external functions, \texttt{loadGapminderData()} and \texttt{cleanGapminderData()}, and source these functions from their respective files, \texttt{load.R} and \texttt{clean.R}. Please open these files to see what \texttt{loadGapminderData()} and \texttt{cleanGapminderData()} are doing and note the function documentation.
+
+```{r source-scripts}
+# can source each file individually
+# source(here("R/load.R")
+# source(here("R/clean.R")
+# source(here("R/utils.R"))
+
+# or can source all files in the R/ directory
+sourceDirectory(here("R"), modifiedOnly = F, recursive = F)
+```
+
+
+```{r load-data}
+# load the original gapminder data
+gapminder_orig <- loadGapminderData()
+
+# clean the gapminder data
+gapminder <- cleanGapminderData(gapminder_orig)
+```
+
+Fortunately, the data was already very clean, so we did not conduct any major modifications to the data. In future labs, if you do need to perform data cleaning, think carefully about the choices you make in the data cleaning stage. Be sure to document how you cleaned the data and why you made those choices.
+
+
+# Visualizing the gapminder data (ggplot2) {#sec:viz}
+
+Next, we put our visualization skills to the test and create different plots with ```ggplot()```.
+
+\begin{tcolorbox}
+1. We are interested in exploring life expectancy as a function of GDP. Create a scatterplot of life expectancy versus GDP for the year 2007 using \texttt{ggplot()}, where the size of points are based on the population of the country and they are colored by the continent the country resides in. 
+\end{tcolorbox}
+
+```{r gdp-life, fig.cap = "We show the life expectancy as a function of GDP for all countries in the year 2007."}
+
+gapminder07 <- gapminder %>%
+  filter(year == 2007)
+
+# start with a blank ggplot layer. Input the gapminder data frame.
+ggplot(gapminder07) +
+  # add a scatter layer
+  geom_point(aes(x = gdp_per_cap, y = life_exp,
+                 size = population,
+                 col = continent), 
+             alpha = 0.6) +
+  # label the outlying data points
+  geom_text(aes(x = gdp_per_cap + 500, y = life_exp, label = country), 
+            hjust = 0,
+            size = 2,
+            data = filter(gapminder, 
+                          gdp_per_cap > 9000, life_exp < 60, year == 2007)) +
+  # add a nice theme (see R/utils.R)
+  theme_nice +
+  scale_x_log10() +
+  xlab("GDP per capita (log10)") +
+  ylab("Life expectancy") +
+  ggtitle("Life expectancy versus GDP for 2007")
+
+```
+
+It certainly appears as though there is some kind of rapid increase in the low GDP range, which slows to a gradual increase in the high GDP range. Several African countries have surprisingly low life expectency for their GDP.
+
+\textbf{Tip:} The figures will be automatically numbered, and we can easily refer to figures (and tables) by the code chunk name, e.g., Figure \ref{fig:gdp-life}.
+
+\begin{tcolorbox}
+2. Next, we explore change in life expectancy over time. For each continent excluding Oceania, use \texttt{ggplot()} to create a series of boxplots over time, where each data point corresponds to the life expectency of a country for the given year in the given continent.
+\end{tcolorbox}
+
+```{r life-time, out.width = "100%", fig.height = 5, fig.cap = "For each continent (excluding Oceania), we plot the trend of life expectancy over time."}
+
+gapminder %>%
+  # remove Oceania
+  filter(continent != "Oceania") %>%
+  # input data frame into ggplot base function
+  ggplot() +
+  # make a separate plot for each continent
+  facet_wrap(~continent) +
+  # add a boxplot layer grouped by year
+  geom_boxplot(aes(x = year, y = life_exp, group = year), fill = "grey90") +
+  # add a nice theme
+  theme_nice +
+  xlab("Year") +
+  ylab("Life expectancy") +
+  ggtitle("Life expectancy over time")
+
+```
+
+We see that the life expectancy increased in Africa from 1950 up until the 1990s but has stayed fairly constant with a median of around 50 years since the 1990s. The Americas, Asia, and Europe on the other hand, have experienced continued growth. 
+
+\textbf{Tip:} We can change the size of the figure by modifying ```out.width```, ```fig.width```, ```fig.height```, and/or other knitr options in the header of the code chunk. You can read more about other knitr options \href{https://yihui.name/knitr/options/}{here}. 
+
+## Comparing GDP across continents (dplyr)
+
+\begin{tcolorbox}
+1. Compute the mean and variance of the GDP for each continent without using \texttt{dplyr()}.
+\end{tcolorbox}
+
+```{r calc-gdp}
+# calculate the avergae GDP per cap for different continents
+tapply(X = gapminder$gdp_per_cap, 
+       INDEX = gapminder$continent, 
+       FUN = mean)
+tapply(X = gapminder$gdp_per_cap, 
+       INDEX = gapminder$continent, 
+       FUN = var)
+
+# the following code is very inneficient (it violates DRY)
+# it is also hard to read
+mean(gapminder[gapminder$continent == "Africa", ]$gdp_per_cap)
+mean(gapminder[gapminder$continent == "Europe", ]$gdp_per_cap)
+mean(gapminder[gapminder$continent == "Americas", ]$gdp_per_cap)
+mean(gapminder[gapminder$continent == "Asia", ]$gdp_per_cap)
+```
+
+\begin{tcolorbox}
+2. Perform the same computation using \texttt{group$\_$by()} and \texttt{summarise()}. Name the resulting tibble \texttt{gdp$\_$stats}.
+\end{tcolorbox}
+
+```{r gdp_table, echo = T}
+gdp_stats <- gapminder %>%
+  group_by(continent) %>%
+  summarise(mean = mean(gdp_per_cap),
+            var = var(gdp_per_cap))
+```
+
+We can display ```gdp_stats``` in a publication-quality table using ```kable()``` and some related functions from the ```kableExtra``` library, which has been loaded. To evaluate the following code chunk and see the resulting table, change ```eval = FALSE``` to ```eval = TRUE``` in the following code chunk header.
+
+```{r gdp-stats, eval = T}
+
+kable(gdp_stats, 
+      booktabs = T, linesep = "", format = "latex", digits = 2,
+      caption = "We show the mean GDP per capita for various continents along with its variance.") %>%
+  kable_styling(latex_options = c("hold_position", "striped"))
+
+```
+
+\textbf{Tip:} Like with figures, we can reference tables by name (e.g., Table \ref{tab:gdp-stats}). Also, try setting ```booktabs = FALSE``` in ```kable()```. I think the table with ```booktabs = TRUE``` looks far better than that with ```booktabs = FALSE```, but this is only my opinion.
+
+\begin{tcolorbox}
+3. Next, we want to ask about raw GDP (i.e. overall GDP for each country, rather than standardized by per capita). Create a table using \texttt{kable()} that shows the average total GDP for each continent in 2007.
+\end{tcolorbox}
+
+
+```{r total_gdp_table}
+
+# the following is less repetitive, and much more readible!
+total_gdp_table <- gapminder %>%
+  # filter to rows from the year 2007
+  filter(year == 2007) %>%
+  # define a variable equal to the total GDP
+  mutate(gdp_total = gdp_per_cap * population / 1000000000) %>%
+  # calculate the average GDP for all continents
+  group_by(continent) %>%
+  summarise(countries = n(), # add up the number of countries
+            mean = round(mean(gdp_total)), # average GDP
+            SD = round(sd(gdp_total))) %>%
+  # arrange the rows in order of decreasing average GDP
+  arrange(desc(mean))
+
+# print a LaTeX table displaying this data
+kable(total_gdp_table, 
+      booktabs = T, linesep = "", format = "latex",
+      caption = paste("A table displaying the mean and standard deviation",
+                      "of GDP (in billions) in 2007 for each continent")) %>%
+  kable_styling(latex_options = c("hold_position", "striped"))
+
+```
+
+\textbf{Tip:} We can evaluate R code outside of the code chunks by placing the code inside single backquotes. For instance, the mean raw GDP for Asia is approximately `r if (!is.null(total_gdp_table)) total_gdp_table$mean[2]`.
+
+
+## Using ```tidyr()``` with the gapminder data 
+
+The gapminder data that we used for visualization was already in a clean usuable format.  Here we are given a dataset that requires some processing to get in a more useful form. Our goal is to transform the ```gapminder_wide``` dataset so that it is in the same form as the original gapminder dataset. Let us first load in the ```gapminder_wide``` dataset and quickly compare it to the original ```gapminder``` dataset.
+
+```{r load_wide_data}
+# load the wide format of the data
+gapminder_wide <- loadGapminderData(path = "data/", 
+                                    filename = "gapminder_wide.csv")
+
+# look at wide_data compared to original 
+dim(gapminder_wide)
+dim(gapminder)
+head(gapminder_wide)[, c(1:4, 37:38)]
+head(gapminder)
+```
+
+We can see that the wide version now has a separate column for each year of GDP, life expectancy, and population.  This data becomes much easier to work with and understand if we can make year into a column.
+
+\begin{tcolorbox}
+1. Use the \texttt{gather()} and \texttt{separate()} functions to create a long version of the data where we only have five columns: continent, country, the value of an observation, the type of observation (i.e. GDP, life expectancy, or population size), and the year of the observation.
+\end{tcolorbox}
+
+```{r to_long, echo = T}
+# first use gather() to create a long version of the data where we only have 4 columns, one each for continent and country, one (obstype_year) that gives the key for the values (obs_values) in the fourth column.
+gapminder_long <- gapminder_wide %>% 
+  gather(key   = obstype_year, # name new column for ID variable
+         value = obs_values,   # name column that will contain the observations
+         starts_with("pop"),             # only include columns that start  
+         starts_with("lifeExp"),         # pop, lifeExp, or gdpPercap
+         starts_with("gdpPercap")) 
+# head(gapminder_long)
+# tail(gapminder_long)
+
+# next separate the obstype_year variable into two separate columns, one that contains the year of the observation and another that tells whether the values in obs_values is gdp, life expectancy, or population. 
+gapminder_long <- gapminder_long %>% 
+  separate(obstype_year,
+           into = c("obs_type", "year"),
+           sep = "_")
+# head(gapminder_long)
+# tail(gapminder_long)
+
+```
+
+\begin{tcolorbox}
+2. Finally, use \texttt{spread()} to convert the long version of the data to get the original intermediate version.
+\end{tcolorbox}
+
+```{r to_normal, echo = T}
+gapminder_normal <- gapminder_long %>% 
+  spread(obs_type, obs_values)
+
+# check that is looks like the original data
+# head(gapminder_normal)
+# dim(gapminder_normal)
+# dim(gapminder_long)
+```
+
+See \url{http://swcarpentry.github.io/r-novice-gapminder/14-tidyr/} for more ways to use ```tidyr()``` on this data.
+
+\textbf{Tip:} In future labs or research projects, it may be necessary to cite papers in your writeup. This can be easily done by creating a .bib file (using \href{http://www.jabref.org/}{JabRef} or your favorite bibliography manager) and setting ```bibliography: name_of_bibliography.bib``` in the header of the .Rmd file. Then, you can easily cite papers as you would in latex (e.g., \cite{gapminder}).
+
+# Bibliography
+
+
