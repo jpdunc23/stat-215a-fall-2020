@@ -1,12 +1,12 @@
 # a function for loading the data
-# be sure to load the packages from lab1.Rnw first!
+# be sure to load the packages from lab1.Rmd first!
 
 loadDatesData <- function(path = "data/") {
   # a function to load the redwood dates data
   # 
   # Arguments:
   #   path: the path indicating the location of the `sonoma-dates` data file.
-  #         Path should be relative to the lab1.Rnw file.
+  #         Path should be relative to the lab1.Rmd file.
   # Returns:
   #   a data.frame with three columns: numbers, dates and days.
   

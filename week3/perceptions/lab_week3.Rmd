@@ -1,0 +1,304 @@
+---
+title: "Week 3 In-Class Lab"
+date: "`r format(Sys.time(), '%B %d, %Y')`"
+header-includes:
+   - \usepackage{float}
+output:
+  html_document:
+    number_sections: true
+---
+
+# Goals
+
+In this in-class lab, we will 
+
+- play around with different  ```ggplot``` themes and color schemes
+- learn about a few useful visualization packages that have different capabilities from ```ggplot```
+
+```{r setup, echo = FALSE, warning = FALSE, message = FALSE}
+# setting default knitr options
+knitr::opts_chunk$set(
+  echo = FALSE,  
+  warning = FALSE,  
+  message = FALSE,  
+  fig.out = "100%",
+  fig.align = "center", 
+  fig.pos = "H",
+  cache = FALSE)
+
+# load useful libraries
+library(tidyverse)
+library(R.utils)
+library(GGally)
+library(superheat)  # Note: installed from GitHub, not CRAN
+library(viridis)
+library(RColorBrewer)
+library(ggridges)
+library(scales)
+library(gridExtra)
+library(ggpubr)
+```
+
+```{r source-scripts}
+# source all files in the R/ directory
+sourceDirectory("./R/", modifiedOnly = F, recursive = F) # useful functions
+```
+
+To guide you through this material, I will provide examples using the ```gapminder``` data that we worked with last week. Then you will work through similar problems using the ```perceptions``` data. Put briefly, the perceptions data deals with the perceptions of different words relating to probabilities and numbers. The raw data came from /r/samplesize responses to the following question: What [probability/number] would you assign to the phrase "[phrase]"? You can read more about the perceptions data at (https://github.com/zonination/perceptions).
+
+# Themes and Color Schemes
+
+As I mentioned in the slides, it can become monotonous to look at 100+ plots with the same gridded gray ```ggplot``` background and the same default ```ggplot``` color scheme. A simple way to mix things up is to apply a different built-in ```ggplot``` theme. Pick your favorite \href{https://ggplot2.tidyverse.org/reference/ggtheme.html}{here} or simply google "custom ggplot themes" for a plethora of options.
+
+```{r load-data}
+# load the original gapminder data
+gapminder_orig <- loadGapminderData()
+# clean the gapminder data
+gapminder <- cleanGapminderData(gapminder_orig)
+
+# load the original perceptions data
+probly_orig <- loadPerceptData(filename = "probly.csv")  # prob survey
+numberly_orig <- loadPerceptData(filename = "numberly.csv")  # number survey
+# clean the perceptions data
+probly <- cleanProblyData(probly_orig)
+numberly <- cleanNumberlyData(numberly_orig)
+```
+
+You can play around with the built-in ggplot themes or even build a custom theme if you're feeling ambitious.
+
+```{r themes}
+
+# default plot
+base_plt <- gapminder %>%
+  # remove Oceania
+  filter(continent != "Oceania") %>%
+  # input data frame into ggplot base function
+  ggplot() +
+  # make a separate plot for each continent
+  facet_wrap(~continent) +
+  # add a boxplot layer grouped by year
+  geom_boxplot(aes(x = year, y = life_exp, group = year)) +
+  xlab("Year") +
+  ylab("Life expectancy") +
+  ggtitle("Life expectancy over time")
+
+# view default theme
+base_plt +
+  ggtitle("Default Theme")
+
+# add built-in theme
+base_plt + 
+  theme_classic() +
+  ggtitle("Classic Built-in Theme")
+
+# add custom theme (see ztheme.R for definition of z_theme())
+base_plt +
+  z_theme() +
+  ggtitle("Custom Theme")
+
+```
+
+1. Compute the mean probability associated with each phrase in the ```probly``` data and plot the results in a bar graph. Add a built-in or custom ggplot theme to this plot. In your plot, make sure you can read the x-axis/phrase labels.
+
+```{r theme-probly}
+
+
+```
+
+
+
+# Color Schemes
+
+Choosing an appropriate color scheme for your plots can drastically improve the readability of your plots. Sometimes, it is worthwhile to stray from the default colors in ggplot. The ```viridis``` package, in particular, has several nice continuous color schemes and can be easily applied to ```ggplot``` objects (see ```scale_color_virids()``` or ```scale_fill_viridis()```). Aside from ```viridis```, the package ```RColorBrewer``` has some nice color palettes, and if you're incredibly ambitious, you can even create your own color palettes. 
+
+
+```{r color-schemes-cts}
+
+base_plt <- ggplot(gapminder) +
+  geom_point(aes(x = log10(life_exp), y = log10(gdp_per_cap), 
+                 color = year),
+             size = .5, alpha = .8)
+
+# base plot
+base_plt +
+  ggtitle("Default Color Scheme (Continuous)")
+
+# viridis
+base_plt + 
+  scale_color_viridis_c(option = "C") +  # try changing the option argument
+  ggtitle("Viridis Color Scheme (Continuous)")
+
+```
+
+
+```{r color-scheme-discrete}
+
+base_plt <- gapminder %>%
+  filter(continent != "Oceania") %>%
+  ggplot() +
+  geom_point(aes(x = log10(life_exp), y = log10(gdp_per_cap),
+                 color = continent),
+             size = .5, alpha = .8)
+
+# base plot
+base_plt +
+  ggtitle("Default Color Scheme (Discrete)")
+
+# RColorBrewer
+my_palette <- brewer.pal(n = nlevels(as.factor(gapminder$continent)), 
+                         name = "Dark2")  # try different palettes
+base_plt + 
+  scale_color_manual(values = my_palette) +
+  ggtitle("RColorBrewer Color Scheme (Discrete)")
+
+# See all the RColorBrewer palettes with this command:
+# display.brewer.all()
+
+```
+
+2. Using the ```numberly``` data, make a boxplot to visualize the distribution of assigned numbers corresponding to each phrase (i.e., there should be a boxplot for each phrase). Due to the highly skewed distributions, please take the $\log_{10}$-transform of the numeric data. Then, add an additional layer to the plot using ```geom_jitter()``` to explicitly plot the assigned numbers for each phrase. Finally, add an appropriate (non-default) color scheme to your plot.
+
+```{r color-numberly}
+
+
+```
+
+
+# Heatmaps
+
+Rather than scatterplots, another type of graph that can often be very informative is a heatmap. Rebecca Barter, a student of Bin and a former 215A GSI, developed the ```superheat``` package, which can be used to make nice heatmaps. In Figure \ref{fig:heatmap}, we plot a heatmap of the life expectancy across time for various countries. Note that the countries have been clustered via hierarchical clustering with Ward's linkage (don't worry if you have no idea what this means yet). This allows us to more easily see patterns in the life expectancies across different groups of countries. Note the difference between the clustered heatmap and the heatmap without clustering. In the clustered heatmap, some of the clusters correspond to coherent geographical regions, which makes intuitive sense.
+
+```{r heatmap, fig.height = 8, fig.cap = "Is a figure without a caption truly a figure?"}
+
+# convert life expectancy data to wide format for superheat
+life_exp_wide <- gapminder %>%
+  select(country, year, life_exp) %>%
+  spread(key = "year", value = "life_exp") %>%
+  sample_frac(size = .5)  %>% # optional; for readability/illustration only
+  arrange(country) %>%
+  column_to_rownames("country")
+
+# ordinary heatmap 
+## superheat(life_exp_wide,
+##           pretty.order.rows = FALSE,
+##           clustering.method = "hierarchical",
+##           linkage.method = "ward.D",
+##           force.left.label = TRUE,
+##           left.label.text.size = 2.5,
+##           bottom.label.text.size = 2.5, 
+##           title = "Life Expectancy (in years)")
+
+# heatmap with clustered countries and mean life expectancy on top
+superheat(life_exp_wide, 
+          # cluster the countries
+          pretty.order.rows = TRUE,
+          row.dendrogram = T,
+          clustering.method = "hierarchical",
+          linkage.method = "ward.D",
+          # plot mean life expectancy per year on top
+          yt = colMeans(life_exp_wide),
+          yt.plot.size = .2,
+          yt.axis.name = "Mean Life \n Expectancy",
+          yt.axis.name.size = 8,
+          # add pretty labels
+          force.left.label = TRUE,
+          left.label.text.size = 2.5,
+          bottom.label.text.size = 2.5, 
+          title = "Life Expectancy (in years)")
+
+```
+
+3. Use ```superheat``` to create a heatmap for the ```probly``` data, where the samples are on the x-axis, phrases on the y-axis, and probabilities represented by the heatmap values/colors. Cluster the samples using hierarchical clustering with complete linkage but don't plot the resulting dendrogram. To the right of the heatmap, plot a bar graph with the average probabilities for each phrase.
+
+```{r superheat-probly}
+
+
+```
+
+# Pair Plots
+
+Last week, we looked at the relationship between life expectancy over time and gdp vs. life expectancy, but we did so separately. It may be informative to look at multiple pair-wise relationships in the data in a single plot. In the ```GGally``` package, the ```ggpairs()``` function allows us to plot a matrix of pair plots, showcasing many different pair-wise relationships in the dataset at the same time.
+
+```{r pair-plots}
+
+# a very basic pair plot
+ggpairs(gapminder, 
+        columns = c(3, 5, 6),
+        title = "A Very Basic Pair Plot")
+
+# show pairwise relationships among the continuous features in data
+ggpairs(data = gapminder %>% mutate(population = log10(population),
+                                    gdp_per_cap = log10(gdp_per_cap)),
+        # which columns to plot
+        columns = c(3, 5, 6),
+        # set color aesthetic
+        mapping = aes(color = continent),
+        # set geom_point(alpha = , size = ) for continuous vars in lower plots
+        lower = list(continuous = wrap("points", alpha = .5, size = .25)),  
+        # set geom_density(alpha = ) for continuous vars in diagonal plots
+        diag = list(continuous = wrap("densityDiag", alpha = .5)),
+        # make correlation text smaller in upper diag plots
+        upper = list(continuous = wrap("cor", size = 3)),
+        title = "A Fancier Pair Plot")
+
+```
+
+
+4. Going beyond pair-wise compairsons between continuous variables, ```ggpairs``` also allows for discrete variables in the pair plots. Create the same type of pair plot as above, but include the following four variables from ```gapminder```: population, continent, life expectancy, and GDP per capita. Also, add a theme to your pair plot.
+
+```{r pair-plot-discrete}
+
+
+```
+
+
+There are a lot of additional options that you can set in the ```ggpairs()``` function, so check out the help page for ```ggpairs```. This help page is very informative, and you can do a lot with the ```ggpairs``` function.
+
+
+# Ridgeline Plots/Joyplots
+
+The ```ggridges``` package provides an additional ```geom``` attribute called ```geom_density_ridges``` that can be added to ```ggplot``` objects. ```geom_density_ridges``` arranges multiple density plots in a staggered fashion.
+
+```{r ggridges}
+
+ggplot(gapminder) +
+  aes(x = log(population), y = continent, fill = continent) +
+  geom_density_ridges(alpha = .5) +
+  z_theme()
+
+```
+
+5. Use ```geom_density_ridges``` to make a nice visualization of the ```numberly``` data. Make sure to take care of skewness and add an appropriate (non-default) color scheme. Please also remove the legend.
+
+```{r ggridges-numberly}
+
+
+```
+
+
+# Side-by-side Plots
+
+Sometimes, it may be useful to organize multiple plots side-by-side. Two packages for doing so are ```gridExtra::grid.arrange``` and ```ggpubr::ggarrange```.
+
+6. One of the advantages of using ```ggarrange``` over ```grid.arrange``` is the ease of creating a common legend and subplot labels with ```ggarrange```. Below, create two scatterplots using the ```gapminder``` data: the first scatterplot showing population vs. life expectancy and the second scatterplot showing gdp per capita vs life expectancy. Color the points in both scatterplots by continent and place these scatterplots side-by-side using ```ggarrange```. Since both scatterplots have the same color legend, use a common legend and set the legend's position to "below". Also, set the ```labels``` argument to "AUTO".
+
+```{r ggarrange, out.width = "100%", results = "hide"}
+
+
+```
+
+
+7. Unlike ```ggarrange```, ```grid.arrange``` allows for very flexible plotting layouts. In addition to the two subplots that you created in exercise 6, create a third plot using ```geom_bar``` which shows the number of data points (i.e., countries) from each continent. Use ```grid.arrange``` to create a plot with the population vs life expectancy plot in the upper left quadrant, the GDP per capita vs life expectancy plot in the upper right quadrant, and the bar plot in the lower two quadrants. The end result should be similar to the plot shown in the gridExtra::grid.arrange slide from class.
+
+```{r gridExtra, out.width = "100%", fig.height = 5}
+
+
+
+```
+
+
+# Interactive Plots
+
+Challenge Exercise: Come up with your own interactive visualization of the perception data. Be creative!
+
+
