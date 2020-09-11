@@ -1,0 +1,6 @@
+# ignore the data folder
+data/
+# ignore the documents folder
+documents/
+# ignore R workspace history files
+.Rhistory
