@@ -33,9 +33,9 @@ Fridays, 11-1, Zoom
 
 **Office Hours**:
 
-*Bin*: Tuesdays 10-11, Thursdays 1-2, Zoom
+*Bin*: Tuesdays 1:30-2:30, Thursdays 1-2, Zoom
 
-*James*: Tuesdays 1-3, Fridays 1:30-3:30, Zoom
+*James*: Mondays 2-4, Thursdays 2-4, Zoom
 
 # Class website
 
