@@ -15,7 +15,6 @@ knitr::opts_chunk$set(
   cache = FALSE)
 
 # load in libraries
-# install.packages("tidyverse")  # if you haven't installed tidyverse before
 library(tidyverse)
 
 # set seed
@@ -56,9 +55,11 @@ iris %>%
 log_petal_length <- log(iris$Sepal.Length)
 min(log_petal_length)
 
-## exercise 1: rewrite with pipe operator here
-
-
+# rewrite with pipe operator
+iris %>%
+  pull(Sepal.Length) %>%
+  log() %>%
+  min()
 ```
 
 
@@ -96,12 +97,13 @@ iris %>%
 ```
 
 
-**Exercise 2.** How many observations have sepal length in the upper 50\% quantile and petal width greater than 2?
+**Exercise 2.** How many observations have sepal length in the upper 50\% quartile and petal width greater than 2?
 
 ```{r ex-filter}
-## exercise 2 solution here
-
-
+iris %>%
+  filter(Sepal.Length > median(Sepal.Length),
+         Petal.Width > 2) %>%
+  nrow()
 ```
 
 Note that there are also variants of ```filter()``` named ```filter_if()```, ```filter_all()```, and ```filter_at()```. If you run ```? filter_if()```, you can learn more about these variants and see examples of how to use these functions.
@@ -149,9 +151,10 @@ data <- matrix(rnorm(500), nrow = 10, ncol = 50) %>%
 # view structure of data
 str(data[, 1:10])
 
-## exercise 3 solution here
-
-
+# extract columns with "Length" in name
+data %>%
+  select(contains("Length")) %>%
+  head()
 ```
 
 
@@ -167,9 +170,18 @@ iris %>%
 **Exercise 4.** Extract the second column of the ```iris``` dataset using ```select()```. Next, extract the second column of the ```iris``` dataset using ```pull()```. What is the difference between ```select()``` and ```pull()```?
 
 ```{r ex-select-pull}
-## exercise 4 solution here
 
+# using select
+iris %>% 
+  select(2) %>%
+  head()
 
+# using pull
+iris %>%
+  pull(2) %>%
+  head()
+
+# The difference is that select() always returns a data frame or tibble while pull() returns a vector. Since many functions in R require you to input arguments with a specific type, be aware of the object types that you are working with. Otherwise, R may cry and throw an obscure error.
 ```
 
 
@@ -211,9 +223,10 @@ iris_new <- iris %>%
 # look at structure of iris_new
 str(iris_new)
 
-## exercise 5 solution here: convert character columns to factors
-
-
+# convert character columns to factors
+iris_new %>%
+  mutate_if(is.character, as.factor) %>%
+  str()
 ```
 
 
@@ -231,8 +244,18 @@ iris %>%
 **Exercise 6.** For each species, randomly select half of the observations and compute the $25^{th}$ quartile for each feature (i.e., ```Sepal.Length```, ```Sepal.Width```, ```Petal.Length```, and ```Petal.Width```). Hint: see ```? sample_frac```
 
 ```{r ex-group_by}
-## exercise 6 solution here
 
+iris %>%
+  group_by(Species) %>%
+  sample_frac(size = .5, replace = F) %>%
+  summarise_all(list(Q1 = quantile), probs = 0.25)
+
+# check to see if we did the sampling correct (and got the right number of obs)
+iris %>%
+  group_by(Species) %>%
+  sample_frac(size = .5, replace = F) %>%
+  select(Species) %>%
+  table()
 
 ```
 
@@ -258,9 +281,11 @@ iris %>%
 **Exercise 7.** For each species, only keep the observations with the largest 10 sepal lengths. Then, sort the rows in order of decreasing sepal length. Hint: see ```? top_n```
 
 ```{r ex-arrange}
-## exercise 7 solution here
-
-
+iris %>%
+  group_by(Species) %>%
+  top_n(n = 10, wt = Sepal.Length) %>%
+  ungroup() %>%
+  arrange(desc(Sepal.Length))
 ```
 
 ## More dplyr
@@ -281,8 +306,8 @@ left_join(x = lowercase_data, y = uppercase_data, by = "id")
 **Exercise 8.** Using the ```lowercase_data``` and ```uppercase_data``` from the previous code chunk, merge the two datasets so that only rows with ```id``` matches in both datasets are kept. In other words, the resulting merged dataset should only include observations with ```id``` $= 1, \dots, 5$.
 
 ```{r ex-join}
-## exericse 8 solution here
 
+inner_join(x = lowercase_data, y = uppercase_data, by = "id")
 
 ```
 
@@ -301,10 +326,16 @@ iris_messy[sample(1:nrow(iris_messy), size = nrow(iris_messy) / 4),
 # sum(is.na(iris_messy))
 # summary(iris_messy)
 
+# delete duplicates and NAs
+iris_clean <- iris_messy %>%
+  drop_na() %>%  # can also use stats::na.omit() here
+  distinct()
 
-## exercise 9 solution here
-
-
+# look at cleaned data
+head(iris_clean)
+str(iris_clean)
+sum(is.na(iris_clean))  # count number of NAs; no NAs
+nrow(unique(iris_clean)) == nrow(iris_clean)  # check if all rows in iris_clean are unique; yes
 ```
 
 
@@ -337,7 +368,7 @@ str(iris_long)
 ```{r spread}
 # long to wide
 iris_wide <- iris_long %>% 
-  gather(key = "Variable", value = "Value")
+  spread(key = "Variable", value = "Value")
 
 # top 
 head(iris_wide)
@@ -356,20 +387,31 @@ str(iris_wide)
 
 str(mtcars)
 
-## exercise 10 solution here
-
+mtcars_long <- mtcars %>%
+  select(-cyl, -vs, -am, -gear, -carb) %>%
+  rownames_to_column("id") %>%
+  gather(key = "Variable", value = "Value", -id) %>%
+  mutate_if(is.character, as.factor)
+str(mtcars_long)
+head(mtcars_long)
+tail(mtcars_long)
 
 ```
-
-# ggplot2
-
-We will get some practice with ```ggplot()``` next time, but if you've made it this far, take a look at the following:
 
 **Challenge Exercise.** ```gather()``` can be particularly useful in conjunction with ```ggplot()``` and ```facet_grid()``` or ```facet_wrap()```. Using the ```mtcars_long``` dataset you created in the previous exercise along with ```ggplot()``` and ```facet_wrap()```, plot a histogram of the values for each variable. In other words, you should end up with one histogram for each of ```disp```, ```drat```, ```hp```, ```mpg```, ```qsec```, and ```wt```.
 
 ```{r ex-ggplot}
-## challenge exercise solution here
 
+ggplot(mtcars_long) +
+  aes(x = Value) +
+  facet_wrap(~Variable, scales = "free") +
+  geom_histogram(bins = 12)
+
+# compare without scales = "free"
+ggplot(mtcars_long) +
+  aes(x = Value) +
+  facet_wrap(~Variable) +
+  geom_histogram(bins = 12)
 
 ```
 
