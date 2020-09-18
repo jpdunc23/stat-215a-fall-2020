@@ -1,0 +1,183 @@
+---
+title: "Week 4 In-Class Lab"
+date: "`r format(Sys.time(), '%B %d, %Y')`"
+header-includes:
+   - \usepackage{float}
+   - \hypersetup{colorlinks, 
+                 urlcolor = blue,
+                 linkcolor = black, 
+                 citecolor = black}
+bibliography: bibliography.bib
+output: 
+  html_document:
+    number_sections: true
+---
+
+# Goals
+
+In this in-class lab, we will revisit KDE and PCA.
+
+```{r setup, echo = FALSE, warning = FALSE, message = FALSE}
+# setting default knitr options
+knitr::opts_chunk$set(
+  echo = FALSE,  
+  warning = FALSE,  
+  message = FALSE,  
+  fig.out = "100%",
+  fig.align = "center", 
+  fig.pos = "H",
+  cache = FALSE)
+
+# load useful libraries
+library(tidyverse)
+library(R.utils)
+library(GGally)
+library(irlba)
+library(ggpubr)
+library(cluster)
+library(dendextend)
+```
+
+```{r source-scripts}
+# source all files in the R/ directory
+sourceDirectory("./R/", modifiedOnly = F, recursive = F) # useful functions
+```
+
+# KDE
+
+In this exercise, we will revisit the probability perceptions data from last
+week and write our own implementation of a kernel density estimate. In
+`ggplot2`, we can use `geom_smooth()` to easily create a KDE visualization.
+
+```{r load-probly}
+perceptions <- read.csv("./data/probly.csv")
+ggplot(perceptions) +
+  geom_density(aes(`Chances.Are.Slight`))
+```
+
+You will implement at least two kernel functions of your choice and then
+estimate the density of the `Chances.Are.Slight` variables in `perceptions`.
+Please complete the implementations of `Kernel1()` and `Kernel2()` to use in
+`EstimateDensity()` in the file `R/kernel_density_fncts.R`. Here are some
+kernels you may want to try:
+
+$$\text{Square kernel (width of 1): } K(x) = 1\{|x| < 1/2\}$$
+
+$$\text{Gaussian kernel: } K(x) = \frac{1}{\sqrt{2\pi}} \exp\{-x^2/2\}$$
+
+$$\text{Epanechnikov kernel: } K(x) = \begin{cases} 
+\frac{3}{4}(1 - x^2/5)/\sqrt{5}, & |x| < \sqrt{5} \\
+ 0 & o.w
+ \end{cases}$$
+
+
+Once you've implemented the kernels, plot them below, showing various values of
+$h$ for each kernel function. What do you think has a more important influence
+on the impression given by the plot: the kernel function or the value of $h$?
+
+```{r smooth-probly}
+# add your solutions here
+```
+
+
+
+# PCA
+
+[This section thanks to Tiffany Tang.]
+
+For our exploration of PCA, we will be looking at gene expression data, obtained from [The Cancer Genome Atlas](https://www.cancer.gov/about-nci/organization/ccg/research/structural-genomics/tcga), for various patients with breast cancer (BRCA). The genomic basis of breast cancer has been extensively studied in the scientific literature, and in particular, scientists have classified breast cancer occurrences into four different subtypes - each with its own defining characteristics and clinical implications [@tcga2012brca].
+
+Below, I have gathered the TCGA BRCA gene expression data for 244 patients along with their cancer subtype information and survival status. Given that there are 17814 genes in this dataset, there is no possible way that we can visualize all possible marginals or pairs of features at once, but perhaps, performing dimension reduction via PCA provides a good starting point for visualization.
+
+```{r load-data}
+
+brca_orig <- loadBRCAData()
+X <- brca_orig$X
+Y <- brca_orig$Y
+str(X)
+str(Y)
+
+```
+
+To perform PCA, we use the function ```prcomp()``` in R. In the output of ```prcomp()```, ```rotation``` gives the PC loadings and ```x``` gives the PC scores, so we can plot the first two PCs with points colored by their breast cancer subtype as follows. Feel free to play around with the center and scale arguments to see how this affects the results.
+
+```{r prcomp}
+
+# run PCA
+prcomp_out <- prcomp(x = X, center = FALSE, scale = FALSE)
+str(prcomp_out)
+summary(prcomp_out)
+
+# plot PC scores
+brca_scores <- prcomp_out$x %>%
+  as.data.frame() %>%
+  mutate(Subtype = Y$BRCA_Subtype_PAM50)
+prcomp_plt <- ggplot(brca_scores) +
+  aes(x = PC1, y = PC2, color = Subtype) +
+  geom_point()
+prcomp_plt
+
+# look at PC directions/loadings: which genes contribute most to the first PC
+brca_loadings <- prcomp_out$rotation %>%
+  as.data.frame() %>%
+  select(PC1) %>%
+  rownames_to_column("Gene") %>%
+  arrange(-abs(PC1))
+head(brca_loadings)
+
+```
+
+
+1. Create a plot with the cumulative proportion of variance explained on the y-axis and the number of PCs on the x-axis. How many PCs do you need to retain $75\%$ of the variation in the data?
+
+```{r scree}
+
+```
+
+But rather than using ```prcomp()```, we can also code up PCA directly by computing the SVD using ```svd()```.
+
+2. Take the SVD of ```X``` and recreate the PC1 vs. PC2 plot. Compare your plot with the above plot that was created using ```prcomp```.
+
+```{r svd-pca}
+
+
+```
+
+
+Given that there is already a built-in R function, ```prcomp()```, for performing PCA, there does not seem to be any advantage to using ```svd()``` over ```prcomp()```. However, there is a huge advantage of knowing the relationship between the SVD and PCA because in practice, you typically only need to compute the first few PCs, not all PCs. As a result, you can use really fast algorithms to compute the first few PCs, or equivalently the first few singular vectors, and improve upon the computational complexity of ```prcomp()```. This is particularly useful when you have incredibly large datasets. One function for computing the top singular vectors of a matrix is ```irlba()``` from the ```irlba``` package. 
+
+3. Use the function ```irlba()``` to compute the first 5 PCs, and compare how long it takes with ```prcomp()``` and ```svd()```.
+
+```{r irlba}
+
+ptm <- proc.time()  # Start the clock!
+## fill me in using irlba()
+proc.time() - ptm  # Stop the clock
+
+# find out how long it takes to run PCA with prcomp
+ptm <- proc.time()  # Start the clock!
+pca_out <- prcomp(x = X, center = F, scale = F)
+proc.time() - ptm  # Stop the clock
+
+# find out how long it takes to run PCA by taking svd
+ptm <- proc.time()  # Start the clock!
+svd_out <- svd(X)
+proc.time() - ptm  # Stop the clock
+
+```
+
+4. Using the output of ```irlba()```, compute the proportion of variance explained for the top 5 PCs without having to compute the full SVD. (Hint: $\text{tr}(\mathbf{X}^{\top} \mathbf{X}) = || \mathbf{X} ||_F^2 = \sum_{i, j} X_{ij}^2$) Compare your result with the results from ```prcomp()```.
+
+```{r var-ex}
+
+
+```
+
+5. Use ```GGally::ggpairs()``` to create a matrix of pair plots using the first 5 PCs, and color each point by the cancer subtype. If you're feeling ambitious, display the proportion of variance explained by each PC in the plot labels using the ```columnLabels``` argument.
+
+```{r pair-plt-prcomp}
+
+
+```
+
+# Bibliography
