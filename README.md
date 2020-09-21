@@ -177,8 +177,9 @@ While you probably did a lot of really cool stuff in your own report, an excelle
 
 For a couple of the labs, you will each receive 2 reports from your peers to grade. A detailed rubric will be provided and you will be expected to provide both written feedback as well as a numeric grade on a variety of topics including communication, quality of data cleaning, relevance of visualizations, and reproducibility (can you easily re-compile their report). 
 
-After you have all submitted your own assignments (and shortly after the deadline), I will run a script that will automatically push two randomly selected reports into a folder called lab1_review/. To retrieve your allocated reports, you will need to git pull. You will have one week to review these two reports and return your feedback in the form of a google questionnaire that I will send by email to you all. I will use these two grades for your report as a guide for grading, rather than as a final decision on your grade.
+After you have all submitted your own assignments (and shortly after the deadline), I will run a script that will automatically push two randomly selected reports into a folder called, e.g., `lab1/peer_review/`. To retrieve your allocated reports, you will need to git pull. You will have one week to review these two reports and return your feedback in the form of a google questionnaire that I will send by email to you all. I will use these two grades for your report as a guide for grading, rather than as a final decision on your grade.
 
+Note that to reproduce your peers' reports, you will have to copy the lab's `data` folder into the folder containing your classmate's `.Rmd` file.
 
 ## Frequently asked questions
 
