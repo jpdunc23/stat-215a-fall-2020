@@ -1,0 +1,312 @@
+---
+title: "Week 4 In-Class Lab"
+author: "Tiffany Tang"
+date: "`r format(Sys.time(), '%B %d, %Y')`"
+header-includes:
+   - \usepackage{float}
+   - \hypersetup{colorlinks, 
+                 urlcolor = blue,
+                 linkcolor = black, 
+                 citecolor = black}
+output: 
+  html_document:
+    number_sections: true
+---
+
+# Goals
+
+In this in-class lab, we will explore various clustering methods such as k-means, hierarchical clustering, and NMF.
+
+```{r setup, echo = FALSE, warning = FALSE, message = FALSE}
+# setting default knitr options
+knitr::opts_chunk$set(
+  echo = FALSE,  
+  warning = FALSE,  
+  message = FALSE,  
+  fig.out = "100%",
+  fig.align = "center", 
+  fig.pos = "H",
+  cache = FALSE)
+
+# load useful libraries
+library(tidyverse)
+library(R.utils)
+library(GGally)
+library(irlba)
+library(ggpubr)
+library(cluster)
+library(dendextend)
+library(NMF)
+```
+
+# Clustering
+
+First, we will look into clustering with some winery data from the UC machine learning repository ([link](https://archive.ics.uci.edu/ml/datasets/wine)). It contains information on the chemical composition of 178 wines from 3 cultivars. Using this data, we will explore and evaluate different clusterings.
+
+```{r load-wine-data}
+
+# load the wines dataset
+wines_orig <- read.csv("./data/wines.csv")
+
+# clean wines dataset
+wines <- wines_orig %>%
+  setNames(c("cultivar", "alcohol", "malic acid", "ash", 
+                     "alcalinity of ash", "magnesium", "total phenols", 
+                     "flavanoids", "nonflavanoid phenols", 
+                     "proanthocyanins", "color intensity", "hue", 
+                     "OD280/OD315 of diluted wines", "proline")) %>%
+  mutate(cultivar = as.factor(cultivar))
+cultivar <- wines$cultivar
+wines <- select(wines, -cultivar)
+
+```
+
+The figure below shows the data projected onto the first two
+principal components, labeled by cultivar. We see that the data points cluster nicely with respect to cultivar in this lower-dimensional space. Feel free to mess around with centering and scaling, but notice that in this case, since each feature is measuring different things and is on a completely different scale, it is probably best to center and scale the data to have mean 0 and norm 1.
+
+```{r wine-pca}
+
+wine_pca <- prcomp(x = wines, center = T, scale = T)
+wine_scores <- as.data.frame(wine_pca$x) %>%
+  mutate(cultivar = cultivar)
+ggplot(wine_scores) +
+  aes(x = PC1, y = PC2, color = cultivar) +
+  geom_point() +
+  ggtitle("Groupings based on cultivar")
+
+```
+
+## K-means
+
+Without having known the true cultivar labels, we may wonder if it is possible to recover the groupings via clustering (i.e., in an unsupervised fashion). We will first try clustering the raw data using k-means and plot the clusters, projected onto the first two PCs.
+
+```{r raw-kmeans}
+# cluster wine data in original and PC spaces and plot along first two PCs
+k <- 3  # set number of clusters
+
+# k-means using all variables
+kmeans_wine <- kmeans(scale(wines),
+                      centers = k)
+
+ggplot(wine_scores) +
+  aes(x = PC1, y = PC2, color = as.factor(kmeans_wine$cluster)) +
+  geom_point() +
+  labs(title = "K-means clustering (k = 3)",
+       color = "Clusters")
+
+```
+
+These clusters look very similar to the groupings based upon cultivar. In fact, if we look at a confusion matrix between the k-means clustering labels and the cultivar labels, we see that only a few observations have been misclassified.
+
+```{r wine-confusion}
+table(kmeans_wine$cluster, cultivar)
+```
+
+However, not all clustering/unsupervised problems are this easy.
+
+1. Perform k-means on the TCGA breast cancer (BRCA) dataset from last week using $k = 4$; however, since k-means is known to perform poorly in high-dimensions, use PCA to first reduce the number of dimensions of the TCGA BRCA dataset to 100 before performing k-means. Then, plot the clusters, projected onto the first two PCs. How do these clusters compare to the true cancer subtypes?
+
+```{r tcga-kmeans}
+
+load("./data/tcga_brca.Rdata")  # -> X and Y
+brca_pca <- prcomp(x = as.matrix(X), center = F, scale = F)
+brca_scores <- as.data.frame(brca_pca$x[, 1:100])
+tcga_kmeans <- kmeans(brca_scores, centers = 4)
+
+plt1 <- ggplot(brca_scores) +
+  aes(x = PC1, y = PC2, color = as.factor(tcga_kmeans$cluster)) +
+  geom_point() +
+  labs(title = "TCGA BRCA K-means clustering (k = 4)",
+       color = "Clusters")
+plt2 <- ggplot(brca_scores) +
+  aes(x = PC1, y = PC2, color = as.factor(Y$BRCA_Subtype_PAM50)) +
+  geom_point() +
+  labs(title = "TCGA BRCA PC Plot",
+       color = "True Subtypes")
+ggarrange(plt1, plt2)
+```
+
+Notice that k-means tends to form clusters of equal sizes and thus, struggles when the true clusters are of different sizes.
+
+Up until now, we have essentially cheated with kmeans by using the known number of cultivars (and breast cancer subtypes) to choose $k$. Typically, the number of clusters is unknown, so we need some way to choose $k$ and to evaluate the quality of a clustering. One useful metric for this is cluster stability: do we recover similar clusters by changing part of our analysis (e.g. using different starting points for algorithms that converge to local optima, perturbing variables). We will cover more formal metrics for stability later in the course. For now, we will use visualization to examine cluster stability. 
+
+2. Try using the k-means algorithm to cluster the wine data with different values of $k$. For each $k$, run the algorithm a few times using different starting points (the kmeans function uses random starting
+points by default) and plot your results. What values of $k$ lead to stable
+clusterings?
+
+```{r kmeans-stability}
+ks <- c(2, 3, 6)  # ks to try
+ntrials <- 4  # number of repititions for each k
+
+# run kmeans multiple times
+kmeans_ks <- lapply(ks, function(k) {
+  lapply(1:ntrials, function(trial) {
+    return(kmeans(scale(wines), centers = k)$cluster)
+  })
+})
+
+# make plot of the resulting clusters from each run of kmeans
+plt_kmeans <- lapply(kmeans_ks, function(kmeans_k) {
+  lapply(kmeans_k, function(clust) {
+    ggplot(wine_scores) +
+      aes(x = PC1, y = PC2, color = as.factor(clust)) +
+      geom_point() +
+      labs(color = "Cluster")
+  })
+})
+
+plts <- list()
+for (i in 1:length(ks)) {
+  plts[[i]] <- ggarrange(plotlist = plt_kmeans[[i]],
+                         common.legend = T, nrow = 2, ncol = 2,
+                         legend = "bottom")
+}
+
+# look at plots
+for (i in 1:length(ks)) {
+  print(plts[[i]])
+}
+
+# visually, it looks like k = 2 and k = 3 give stable clusterings
+
+```
+
+Having stable clusters is a good first sign that the clusters you found may, in some sense, be real. 
+
+A more quantitative method for choosing the number of clusters to use in k-means is via the silhouette method. Intuitively, we expect good clusters to contain points that are close to one another and far from points in other clusters. Silhouettes are one way to measure this. Given a distance matrix and set of cluster labels, R's silhouette function in the package ```cluster``` calculates: for each observation $i = 1, \dots, n$
+
+$$s_{i}=\frac{b_{i}-a_{i}}{\max(a_{i}, b_{i})}$$
+
+where $a_{i}=\sum_{j\in C_{i}} d(x_{i}, x_{j})$ is the average distance between
+$x_i$ and all other points belonging to the same cluster $C_{i}$ and $b_{i}=\min_{C_k} \sum_{j\in C_{k}} d(x_{i}, x_{j})$ for $k \ne i$ is the average dissimilarity between $x_{i}$ and the nearest cluster to which $x_{i}$ does not belong. The figure below shows an example with $k = 3$.
+
+```{r silhouette3, message=FALSE, fig.height=8}
+# calculate a distance matrix based on the scaled wines dataset
+dist_mat <- dist(scale(wines))
+s <- silhouette(kmeans_wine$cluster, dist_mat)
+
+# average silhouette width
+print("Average silhouette width:")
+mean(s[, 3])
+plot(s)
+```
+
+3. Try experimenting with other values of $k$ and plot the resulting silhouettes. A larger average silhoutte distance indicates a better choice of $k$, so what $k$ would you end up choosing based upon the silhouette method?
+
+```{r silhouette10, echo=FALSE, cache=FALSE, message=FALSE, fig.height = 12}
+kmeans_k6 <- kmeans(scale(wines), centers = 6)
+s <- silhouette(kmeans_k6$cluster, dist_mat)
+
+# average silhouette width
+mean(s[, 3])
+plot(s)
+```
+
+You can probably make much prettier plots than these by calculating silhouette width manually and using ggplot. These plots have terrible headings and are just generally unsatisfactory.
+
+## Hierarchical Clustering
+
+Hierarchical clustering, while easily interpretable and visually appealing, is heavily dependent on the choice of distance and linkage metrics. Examples of distance metrics include $\ell_2$, $\ell_1$, or correlation. Examples of linkage metrics include single, complete, average, and Ward's linkages. 
+
+We will explore the effects of using different linkages, combined with the $\ell_2$ distance metric, next.
+
+```{r hclust-l2}
+# helper variables
+y <- cultivar
+n_colors <- nlevels(cultivar)
+linkages <- c("single", "complete", "average", "ward.D")
+hclust_dend_ls <- list()
+
+# compute euclidean distance metric
+dist_mat <- dist(scale(wines), method = "euclidean")
+
+# run hierarchical clustering with various linkages
+for (linkage in linkages) {
+  # run hierarchical clustering algorithm
+  hclust_out <- hclust(d = dist_mat, method = linkage)
+  
+  # extract dendrogram for plotting
+  hclust_dend <- as.dendrogram(hclust_out)
+  
+  # add color to dendrogram to indicate cultivar labels
+  labels_colors(hclust_dend) <- c(1:n_colors)[y][order.dendrogram(hclust_dend)]
+  labels(hclust_dend) <- "------"
+
+  # save dendrogram to list
+  hclust_dend_ls[[linkage]] <- hclust_dend
+}
+
+# plot dendrograms from various linkages
+par(mfrow = c(2, 2))
+for (linkage in linkages) {
+  plot(hclust_dend_ls[[linkage]], 
+       main = paste0("Euclidean distance + ", linkage, " linkage"))
+}
+
+```
+
+4. Run hierarchical clustering on the wines data set using correlation (i.e., $d(x, y) = 1 - \text{corr(x, y)}$) as the distance metric and your choice of linkage. Then use the function ```cutree``` to cut the tree so that there are three clusters. Check to see how well these clusters match the known cultivar labels using ```table()```.
+
+```{r hclust-cor}
+linkages <- c("single", "complete", "average", "ward.D")
+hclust_dend_ls <- list()
+hclust_ls <- list()
+
+# compute correlation distance metric
+cor_mat <- 1 - cor(t(scale(wines)))
+dist_mat <- as.dist(cor_mat)
+
+# run hierarchical clustering with various linkages
+for (linkage in linkages) {
+  # run hierarchical clustering algorithm
+  hclust_out <- hclust(d = dist_mat, method = linkage)
+  
+  # extract dendrogram for plotting
+  hclust_dend <- as.dendrogram(hclust_out)
+  
+  # add color to dendrogram to indicate cultivar labels
+  labels_colors(hclust_dend) <- c(1:n_colors)[y][order.dendrogram(hclust_dend)]
+  labels(hclust_dend) <- "------"
+
+  # save dendrogram and hclust results to list
+  hclust_ls[[linkage]] <- hclust_out
+  hclust_dend_ls[[linkage]] <- hclust_dend
+}
+
+# plot dendrograms from various linkages
+par(mfrow = c(2, 2))
+for (linkage in linkages) {
+  plot(hclust_dend_ls[[linkage]], 
+       main = paste0("Correlation distance + ", linkage, " linkage"))
+}
+
+# look more closely at correlation + ward's linkage; cut tree to get 3 clusters
+ward_clust <- cutree(hclust_ls[["ward.D"]], 3)
+# compare results to known cultivar labels
+table(ward_clust, y)  # -> only a few misclassified observations
+
+```
+
+## Nonnegative Matrix Factorizations (NMF)
+
+Lastly, rather than finding hard clusters, we may want to look for more of a continuum of clusters, where each observation is assigned a probability of being in one or more clusters. NMF provides one way of performing this soft clustering.
+
+5. Use the ```nmf``` function from the ```NMF``` package to perform NMF with $k = 3$ on the wine data. Then use the ```basismap``` and ```coefmap``` functions to try to interpret the clusters and feature patterns. 
+
+[Note: the `nmf` package uses `S4` for object-oriented programming. If you're unfamiliar with `S4`, the [Advanced R](https://adv-r.hadley.nz/s4.html) book provides a nice introduction. In short, use `slotNames()` on an `S4` object to see what named components the object has (similar to using `ls()` on a fitted `lm` object) and access a given slot using `@`, e.g. if `obj` is an `S4` object, get the `fit` slot by typing `obj@fit`.]
+
+```{r nmf}
+
+nmf_out <- nmf(scale(wines, center = F, scale = T), rank = 3)
+
+W <- nmf_out@fit@W
+H <- nmf_out@fit@H
+
+par(mfrow = c(1,2))
+basismap(nmf_out, Rowv = NA, main = "W Matrix", 
+         annRow = list(Cultivar = cultivar))
+coefmap(nmf_out, main = "H Matrix", Colv = FALSE, 
+        annLegend = FALSE, legend = FALSE)
+
+```
+
