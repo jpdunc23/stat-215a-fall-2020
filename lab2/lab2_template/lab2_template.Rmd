@@ -1,0 +1,65 @@
+---
+title: "Lab 2 - Linguistics Data, Stat 215A, Fall 2020"
+author: "Your name"
+date: "`r format(Sys.time(), '%B %d, %Y')`"
+header-includes:
+   - \usepackage{float}
+output: 
+  pdf_document:
+    number_sections: true
+---
+
+Please use this structure for your report, but you do not have to slavishly follow this template. All bullet points are merely suggestions and potential points to discuss in your writeup. Your report should be no more than 12 pages, including figures. Do not include *any* code or code output in your report. Indicate your informal collaborators on the assignment, if you had any.
+
+# Introduction
+
+- Describe the problem of interest and put your analysis in the domain context. Read the introduction of the two Nerbonne and Kertzschmar papers for some help here.
+- What do you aim to learn from this data?
+- Outline what you will be doing in the rest of the report/analysis
+
+
+# The Data
+
+- What is the data that you will be looking at?
+- Provide a brief overview of the data
+- How is this data relevant to the problem of interest? In other words, make the link between the data and the domain problem
+
+
+## Data Cleaning
+
+- This dataset isn't as bad as the redwood data, but there are still
+some issues. You should discuss them here and describe your strategies
+for dealing with them.
+- Remember to record your preprocessing steps and to be transparent!
+
+
+## Exploratory Data Analysis
+
+- This is where you compare pairs of questions with discussion and plots.
+
+
+# Dimension reduction methods
+
+- This is where you discuss and show plots about the results of whatever
+dimension reduction techniques you tried - PCA, variants of PCA, t-SNE, NMF, random projections, etc.
+- What do you learn from your dimension reduction outputs
+- Discuss centering and scaling decisions
+
+# Clustering
+
+- This is where you discuss and show plots about the results of whatever clustering methods your tried - k-means, hierarchical clustering, NMF, etc.
+
+# Stability of findings to perturbation
+
+- What happens to your clusters when you perturb the data set?
+- What happens when you re-run the algorithm with different starting points?
+
+# Conclusion
+
+- Discuss the three realms of data science by answering the questions in the instructions pdf.
+- Come up with a reality check that would help you to verify your clustering. You do not necessarily have to perform this reality check, but you can if doable.
+- What are the main takeaways from your exploration/clustering/stability analysis?
+
+# Academic Integrity Statement
+
+- Please include your statement here. Do NOT include your name, to avoid putting it in the lab2_blind.pdf document.
