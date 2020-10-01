@@ -165,6 +165,8 @@ lab1/
 
 - The `documents/` folder will contain any relevant papers or documents for the project.
 
+- The `other/` directory can contain additional files needed to reproduce your lab (e.g. .bib files), but try to avoid depending too heavily on this directory.
+
 Note that GitHub cannot host files more than 100 MB. If you try to push a file larger than this, GitHub will cry.
 
 When you are ready, you need to add, commit, and push the `lab1/` folder.
