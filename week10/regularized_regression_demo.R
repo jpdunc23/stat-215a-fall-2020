@@ -138,7 +138,7 @@ data.frame(betah_ls[-1], as.matrix(betah_r), as.matrix(betah_l),
 par(mfrow = c(2, 3))
 par(mar = c(5, 4, 3, 2))
 
-ridge_fit <- glmnet(x = X, y = y, alpha = 1)
+ridge_fit <- glmnet(x = X, y = y, alpha = 0)
 plot(ridge_fit, xvar = "lambda", label = T, col = 1:p, main = "Ridge")
 
 lasso_fit <- glmnet(x = X, y = y, alpha = 1)
