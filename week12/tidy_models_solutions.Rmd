@@ -1,0 +1,679 @@
+---
+title: "Tidymodels"
+author: "James Duncan, STAT 215A Fall 2020"
+date: "`r format(Sys.time(), '%B %d, %Y')`"
+output:
+  html_document:
+    toc: true
+    highlight: zenburn
+---
+
+<style>
+div.sourceCode, .bg-success {
+    width: 80%;
+    margin-left: auto;
+    margin-right: auto;
+}
+</style>
+
+```{r setup, echo = FALSE, warning = FALSE, message = FALSE}
+# set knitr options globally
+knitr::opts_chunk$set(
+  echo = TRUE,  # do print code
+  warning = FALSE,  # don't print warnings
+  message = FALSE,  # don't print messages
+  attr.source = ".numberLines", # number lines of code
+  class.output="bg-success" # style R output
+)
+library(tidyverse)
+library(tidymodels)
+library(knitr)
+library(kableExtra)
+library(glmnet)
+library(ranger)
+```
+
+## Introducing `tidymodels`
+
+_Note: much of this tutorial is based on examples in [Tidy Modeling with R](https://www.tmwr.org/) (currently unfinished). 
+Another great resource is [Rebecca Barter's tutorial](http://www.rebeccabarter.com/blog/2020-03-25_machine_learning/)._
+
+The R package `tidymodels` provides utilities for machine learning and creates a
+unified interface to the vast ecosystem of machine learning packages written in
+R. It is the successor package to `caret` and is written in part by the same
+author, Max Kuhn. In fact, `tidymodels` itself is really an ecosystem that
+includes the following packages:
+
+- [`rsample`](https://rsample.tidymodels.org/): data resampling and splitting
+- [`recipes`](https://recipes.tidymodels.org/): design matrix specification
+- [`parsnip`](https://parsnip.tidymodels.org/): ML model specification
+- [`tune`](https://tune.tidymodels.org/): parameter  tuning
+- [`yardstick`](https://yardstick.tidymodels.org/): model evaluation 
+
+Let's start by installing the `tidymodels` and `modeldata` (for the example
+dataset we will use) packages:
+
+```{r, eval = FALSE}
+install.packages("tidymodels")
+install.packages("modeldata")
+library(tidymodels)
+```
+
+Let's load in the Ames housing data set that we saw in lecture earlier this
+semester:
+
+```{r ames}
+data(ames, package = "modeldata")
+```
+
+Our outcome is going to be the sale price of homes in the Ames area (column
+`Sale_Price`). In the below histogram, you can see that the housing prices are
+skewed left.
+
+```{r sale-price}
+ggplot(ames, aes(x = Sale_Price)) + 
+  geom_histogram(bins = 50) +
+  xlab("Sale Price (US$)")
+```
+
+Our models will probably work better if we apply a transformation that reduces
+the amount of skew, so let's do that now. We'll see later how we can create
+reusable `recipes` to do transformations on our predictors, but typically we
+will want to manually transform the outcome.
+
+```{r tranform-sale-price}
+ames <- ames %>%
+  mutate(Sale_Price = log10(Sale_Price))
+
+ggplot(ames, aes(x = Sale_Price)) +
+  geom_histogram(bins = 50) +
+  xlab("Sale Price (US$, log base 10)")
+```
+
+## Sample splitting
+
+The `rsample` package provides utilities for working with "resamples" of the
+data, which it defines as two-way splits of a dataset. It uses two main
+abstractions for working with these sample splits:
+
+1. `rsplit`: represents an individual two-way split of the dataset into
+   "analysis" and "assessment" data. For example, this could be one of the
+   train/validation splits in 10-fold cross-validation, i.e. 90% of the data as
+   training and 10% as validation. In bootstrap, it would be the data that was
+   sampled during the sampling with replacement, and the remainder of the data
+   that wasn't sampled.
+2. `rset`: represents a set of two-way splits. An `rset` is a `tibble` (if
+   you're not familiar with `tibbles`, just think `data.frame`). For example, an
+   `rset` could hold all 10 of the 10-fold cross validation splits, or it may
+   hold multiple bootstrap samples.
+
+The `initial_split()` function creates a training and test set. Use
+`initial_split()` to create an 80/20 division of the data where you stratify on
+the outcome `Sale_Price` to ensure a balanced split:
+
+```{r initial-split}
+# to make the split reproducible, we must set a seed
+set.seed(215)
+
+# you may want to take a look at the documentation for initial_split()
+# ?initial_split
+
+# create a train-test split, stratified by Sale_Price
+ames_split <- initial_split(ames, prob = 0.80, strata = Sale_Price)
+ames_split
+```
+
+We can access the training set using the function `training()` and the test set
+via `testing()`. Extract the training and test sets into variables called
+`ames_train` and `ames_test`:
+
+```{r stratified-split}
+ames_train <- training(ames_split)
+ames_test  <-  testing(ames_split)
+```
+
+We can further split the training set into training and validation using the
+function `validation_split()`. Extract the training set using `training()` and
+apply `validation_split()` to it. Don't forget to stratify by `Sale_Price`:
+
+```{r validation-split}
+# create a validation split
+val_set <- validation_split(ames_train, prop = 3/4, strata = Sale_Price)
+val_set
+```
+
+**Note**: You may notice that `validation_split()` returns an `rset` rather than
+an `rsplit` as in the case of `initial_split()`.
+
+Finally, we might also want to do some parameter tuning using cross validation,
+so we can use `vfold_cv()` on the "analysis" portion of the validation split. Do
+that now. **Hint:** Extract the `rsplit` object from the `splits` column of the
+validation `rset`, and use `training()` and `testing()` on it.
+
+```{r cv-split}
+# create a vfold_cv set from the training data
+ames_cv <- vfold_cv(training(val_set$splits[[1]]))
+```
+
+## Recipes
+
+Now that our sample splits are ready, lets prepare for model fitting by
+pre-processing the data. The `recipes` package allows us to do feature
+engineering and preprocessing tasks in a unified way across our models. It also
+allows us to decouple the specification of the variables we want to use from the
+preprocessing steps we will apply to those variables. For example, take the
+following simple formula:
+
+```
+Sale_Price ~ Neighborhood + log10(Gr_Liv_Area) + Year_Built + Bldg_Type
+```
+
+Using `recipes`, we can create an object to represent this formula as:
+
+```{r simple-formula, eval = FALSE}
+simple_ames <-
+  recipe(Sale_Price ~ Neighborhood + Gr_Liv_Area + Year_Built + Bldg_Type,
+         data = ames_train) %>%
+  step_log(Gr_Liv_Area, base = 10) %>% # log10 transform the Gr_Liv_Area variable
+  step_dummy(all_nominal()) # binarize all of the categorical variables
+```
+
+This separates the variable selection from the variable transformations: in this
+case, taking the log of `Gr_Liv_Area` (area of the living room) and applying a
+binary encoding to all of the columns that have factor or character types.
+Moreover, we can select variables using `dplyr`-like syntax.
+
+Say that we want to add `Exter_Cond`, the exterior condition of the house, as
+one of our predictors. This is an ordinal variable with values (from worst to
+best) "Poor", "Fair", "Typical", "Good", and "Excellent". Let's look how many
+observations there are in each level:
+
+```{r exter-cond, echo = FALSE}
+ames %>%
+  group_by(Exter_Cond) %>%
+  tally() %>%
+  kable() %>%
+  kable_styling(full_width = FALSE)
+```
+There are very few "Excellent" houses and even fewer "Poor" houses, but we still think this is an important variable, so lets apply a transformation to replace `Exter_Cond` with the levels "Low" ("Poor" and "Fair"), "Average" ("Typical"), and "High" ("Good" and "Excellent"). We can use `step_mutate()` which works just like `dplyr`'s `mutate()` function:
+
+```{r step-mutate}
+# same as before, but now Exter_Cond is included
+# and wait to binarize until after we remake Exter_Cond
+simple_ames <-
+  recipe(Sale_Price ~
+           Neighborhood + Gr_Liv_Area + Year_Built + Bldg_Type + Exter_Cond,
+         data = ames) %>%
+  step_log(Gr_Liv_Area, base = 10) # log10 transform the Gr_Liv_Area variable
+
+# Add a step to the remake Exter_Cond variable. Be sure that the variable is a
+# factor so it gets converted to a dummy variable by step_dummy.
+simple_ames <- simple_ames %>%
+  step_mutate(
+    Exter_Cond = factor(if_else(
+      Exter_Cond %in% c("Poor", "Fair"), "Low",
+      if_else(
+        Exter_Cond %in% c("Good", "Excellent"), "High",
+        "Average" # corresponds to Typical in Exter_Cond
+      )
+    ))
+  ) %>%
+  step_dummy(all_nominal()) # don't forget to binarize all of the categorical variables
+simple_ames
+```
+
+**Note**: Feel free to use a more complicated formula. You can learn more about
+the data [here](http://jse.amstat.org/v19n3/decock/DataDocumentation.txt).
+
+At this point, we haven't actually done anything to the data yet; we're simply
+creating a reusable specification of how the data should be prepared. To apply
+these steps and actually calculate statistics from the training data, use the
+`prep()` function:
+
+```{r prep-train, eval = FALSE}
+# prepare pre-processing statistics
+simple_ames <- prep(simple_ames, training = ames_train, retain = TRUE)
+simple_ames
+```
+
+The `prep()` function calculates and saves statistics on the training data.
+We've used the argument `retain = TRUE` so that the pre-processed training data
+is retained and we don't have to redo the computation later on. The `bake()`
+function (if the cooking analogy wasn't already painfully obvious I'm sure it is
+now) can be used to apply pre-processing steps to new data (or get the
+pre-processed training data) via `new_data` argument. For example:
+
+```{r bake-ames, eval = FALSE}
+# time to bake the recipe now that the ingredients are prepared
+# this returns the pre-processed validation data
+bake(simple_ames, new_data = ames_validate)
+```
+
+To make the point of all of this a bit more clear, consider the step
+`step_normalize()`. When used in a recipe and applied to some training data
+using `prep()`, this step calculates and saves the means and SDs of the
+continuous predictors in the data. Then, when the recipe is used again on
+assessment data via `bake()`, the continuous variables in this new data are
+centered and scaled _using the means and SDs calculated on the training data_.
+
+Luckily, as we will see later on, we don't actually have to manually call
+`prep()` and `bake()` at every step of our analysis. Instead, they will be
+called for us under the hood by higher level model-fitting functions from the
+`parsnip` package.
+
+## Modeling
+
+### Unified modeling via `parsnip`
+
+The `parsnip` package helps to create a unified interface to the many modeling
+packages and functions that are available in R. For example, the `glmnet()`
+function expects arguments `x` and `y` where `x` is a design matrix (not at a
+`data.frame`!) and `y` is a vector of responses, which results in a very
+different interface for linear models with and without regularization:
+
+```{r glmnet-vs-lm, results = "hide"}
+# generate some predictors
+data_matrix <- matrix(rnorm(15000), ncol = 100)
+colnames(data_matrix) <- paste0("x", 1:100)
+
+# generate a sparse response
+beta <- c(3, 3, -3, 0, -3, 0, 3, rep(0, 93))
+y <- rnorm(150, data_matrix %*% beta)
+
+# create a data.frame with response and predictors
+data_df <- cbind(as.data.frame(cbind(y, data_matrix)))
+
+# linear model, no regularization
+# handy formula syntax y ~ .
+# data argument must be a data.frame
+lm(y ~ ., data = data_df)
+
+# linear model with l1 penalty
+# x must be a matrix
+# can't use a formula
+glmnet(x = data_matrix, y = y)
+```
+
+Using `parsnip`, this becomes a bit nicer:
+
+```{r parsnip-glmnet-lm}
+lm_model <- linear_reg() %>% set_engine("lm")
+lm_model
+
+lm_l1_model <- linear_reg() %>% set_engine("glmnet")
+lm_l1_model
+```
+
+We use `set_engine()` to tell `parsnip` what package to use when we fit the
+model. To see what engines are available use `show_engines("model_type")`; in
+this case, `show_engines("linear_reg")`. To see what the equivalent call would
+be in the original package's syntax, use `translate()`:
+
+```{r translate-parsnip}
+lm_l1_model %>% translate()
+```
+
+The `x` and `y` variables are both `missing_arg()` because we haven't actually
+told `parsnip` what data to use. To do so, we can use the `fit()` function:
+
+```{r fit-glmnet, results = "hide"}
+# you can use the formula syntax
+lm_l1_model %>% fit(y ~ ., data = data_df)
+
+# or you can use the x and y syntax
+lm_l1_model %>% fit_xy(x = data_matrix, y = y)
+
+# and the xy syntax works fine with a data.frame
+lm_l1_model %>% fit_xy(x = data_df %>% select(starts_with("x")), y = y)
+```
+
+So far we've seen how we specify the type of model using functions like
+`linear_reg()` and choose the specific implementation via `set_engine()`. Some
+models, however, are flexible in the types of outcomes they can estimate, so in
+those cases we can use `set_mode()` to specify our outcome type:
+
+```{r rand-forest}
+# fit a random forest to our toy data
+rand_forest() %>% # the model type and hyperparameters
+  set_engine("ranger") %>% # the backend
+  set_mode("regression") %>% # the outcome type
+  fit(y ~ ., data = data_df)
+```
+
+The `parsnip` package also helps provide some consistency in model arguments as
+well as consistency in the modeling interface. You can learn more in Chapter 7
+of the [Tidy Modeling with R](https://www.tmwr.org/models.html) book. Note that
+some of the models supported within the `parsnip` modeling framework are
+included in other packages to prevent the `parsnip` package itself from becoming
+too bloated. To learn more about what models are supported by `parsnip`, as well
+as the arguments and available engines, you can use its [model
+explorer](https://www.tidymodels.org/find/parsnip/).
+
+### Putting it together with `workflows`
+
+We can use `parsnip` to fit individual models, but the real power of
+`tidymodels` becomes apparent when we chain together the sample splitting, data
+pre-processing, and modeling into one cohesive pipeline. The `workflows` package
+allows us to do that. Consider the example below:
+
+```{r simple-workflow}
+lm_base_workflow <- workflow() %>%
+  # if you don't have any preprocessing, you can just use a simple formula here
+  add_formula(y ~ .)
+
+lm_workflow <- lm_base_workflow %>%
+  add_model(lm_model)
+
+lm_l1_workflow <- lm_base_workflow %>%
+  add_model(lm_l1_model)
+```
+
+To add a recipe instead of a formula, use `add_recipe()`. 
+
+Let's return to the Ames data. Create a workflow that has:
+
+1. A random forest model which uses the `ranger` package as its engine. You
+   should modify one of the default arguments.
+2. A recipe like `simple_ames` that additionally puts all of the `Neighborhood`s
+   that have less than 1% of the observations into an "other" category. (There
+   may be a better choice than `step_mutate()` to do this. Check the [`recipes`
+   function reference page](https://recipes.tidymodels.org/reference/index.html). 
+   Also, do we need dummy variables for random forest?)
+
+Also create a workflow with a similar recipe but replace the random forest with
+a linear model.
+
+```{r ames-workflows}
+# the recipe will be similar for both workflows, so let's make a shared base recipe
+ames_base_recipe <- recipe(
+  Sale_Price ~ Neighborhood + Gr_Liv_Area + Year_Built + Bldg_Type,
+  data = ames_train
+) %>%
+  step_log(Gr_Liv_Area, base = 10) %>%
+  step_other(Neighborhood, threshold = 0.01)
+
+# random forest workflow
+ames_rf_workflow <- workflow() %>%
+  add_recipe(ames_base_recipe) %>%
+  add_model(
+    # we could instead use set_args() to set the model arguments
+    rand_forest(trees = 100, min_n = 5) %>%
+      set_engine("ranger") %>%
+      set_mode("regression")
+  )
+
+# linear model workflow
+ames_lm_workflow <- workflow() %>%
+  add_recipe(
+    ames_base_recipe %>%
+      step_dummy(all_nominal()) %>% # need the dummy step
+      step_normalize(all_numeric()) # normalize the numeric covars
+  ) %>%
+  add_model(
+    linear_reg() %>%
+      set_engine("lm")
+  )
+```
+
+## Model tuning
+
+### Evaluating models with `yardstick`
+
+Before continuing with the Ames data, let's return to the toy linear regression
+example to see how we can tune and evaluate our models. To use the metrics in
+`yardstick` we first need to put our predictions and the corresponding observed
+values into a `data.frame`.
+
+```{r evaluate}
+# split the toy data into training and test sets using rsample
+data_split <- initial_split(data_df, prop = 0.8)
+data_train <- training(data_split)
+data_test <- testing(data_split)
+
+# create a recipe to normalize the covariates
+lm_recipe <- recipe(y ~ ., data = data_train) %>%
+  # normalize all numeric predictors, but not the outcome
+  step_normalize(all_numeric(), -y)
+
+lm_workflow <- lm_workflow %>%
+  # we have to remove the formula
+  remove_formula() %>%
+  # before we can add the recipe
+  add_recipe(lm_recipe)
+
+lm_l1_workflow <- lm_l1_workflow %>%
+  remove_formula() %>%
+  add_recipe(lm_recipe)
+
+# predict
+lm_fit <- lm_workflow %>% fit(data = data_train)
+lm_l1_fit <- lm_l1_workflow %>% fit(data = data_train)
+
+# create the data.frame of predictions and observed values
+lm_test_res <- bind_cols(
+  # get the lm predictions
+  predict( # this returns a tibble with a .pred column with the predictions
+    lm_fit,
+    new_data = data_test %>% select(-y)
+  ) %>%
+    rename(lm_pred = .pred), # rename the .pred column
+  # get the glmnet predictions
+  predict(
+    lm_l1_fit,
+    # the penalty is required for the glmnet engine
+    # we arbitrarily choose lambda = 0.5
+    # normally one would use CV to choose
+    penalty = 0.5,
+    new_data = data_test %>% select(-y)
+  ) %>%
+    rename(lm_l1_pred = .pred),
+  # the corresponding observed values
+  data_test %>% select(y)
+)
+```
+
+Now that we have the predictions we can use `rmse` to get the root mean-squared
+error:
+
+```{r rmse}
+# rmse for lm
+rmse(lm_test_res, truth = y, estimate = lm_pred)
+
+# rmse for lasso
+rmse(lm_test_res, truth = y, estimate = lm_l1_pred)
+```
+
+If there were multiple metrics we cared about, we could group them using
+`metric_set()` which returns a function that we can use just like the individual
+metric functions:
+
+```{r lm-metrics}
+# create the metric set
+lm_metrics <- metric_set(rmse, rsq, mae)
+
+# all the metrics for lm
+lm_metrics(lm_test_res, truth = y, estimate = lm_pred)
+
+# all the metrics for lasso
+lm_metrics(lm_test_res, truth = y, estimate = lm_l1_pred)
+```
+
+### Hyperparameter Tuning
+
+Often when adding regularization model, we use cross-validation to choose the
+amount of regularization. In `glmnet`, this would be done using the function
+`cv.glmnet()`. For our toy problem, this results in the following:
+
+```{r cv-glmnet, echo = FALSE}
+plot(
+  cv.glmnet(x = data_train %>% select(-y) %>% as.matrix,
+            y = data_train %>% pull(y))
+)
+```
+
+Let's produce the same thing using `tidymodels`. We'll instead use `tune_grid()`
+from the `tune` package along with a `vfold_cv` sample split. Below we create
+the `vfold_cv` sample split for the `data_train` data frame and tune the
+`penalty` parameter for regularized regression:
+
+```{r vfold-data}
+# split the data into 10 cv folds
+cv_data <- vfold_cv(data_train)
+
+# create the hyperparameter grid
+penalty_grid <- expand.grid(penalty = exp(seq(-6.2, 1, length.out = 100)))
+
+# add a normalization step
+lm_l1_recipe <- recipe(y ~ ., data = data_train) %>%
+  step_normalize(all_numeric(), -y)
+
+# we need to use tune() as a placeholder for the hyperparameter so that the
+# model knows it will be tuned
+tuning_lm_l1_model <- lm_l1_model %>%
+  set_args(penalty = tune())
+
+# tune the penalty parameter using CV
+lm_l1_cv_tuned <- workflow()  %>%
+  add_recipe(lm_l1_recipe) %>%
+  add_model(tuning_lm_l1_model) %>%
+  tune_grid(resamples = cv_data, grid = penalty_grid,
+            metrics = metric_set(rmse))
+
+# collect_metrics() is a handy helper to output the results
+lm_l1_metrics <- lm_l1_cv_tuned %>%
+  collect_metrics()
+
+# plot the cv error as a function of the penalty
+lm_l1_metrics %>%
+  ggplot(aes(x = log(penalty), y = mean)) +
+  geom_point() +
+  geom_errorbar(aes(ymin = mean - std_err, ymax = mean + std_err)) +
+  labs(y = "rmse")
+```
+
+The y-axis is root-mean-square error and the results are not quite the same as
+`glmnet`'s, but this is to be expected since our CV folds will not be the same
+as those chosen by `glmnet`. Now we can use our best penalty and estimate the
+`rmse` for the test set:
+
+```{r refit-l1-model}
+penalty <- min(lm_l1_metrics$mean)
+
+tuned_lm_l1_model <- lm_l1_model %>%
+  set_args(penalty = penalty)
+
+# refit to the training set
+tuned_lm_l1_model_fit <- workflow()  %>%
+  add_recipe(lm_l1_recipe) %>%
+  add_model(tuned_lm_l1_model) %>%
+  fit(data = data_train)
+
+# recall that the result of predict is a tibble
+lm_l1_tuned_test_res <- bind_cols(
+  predict(
+    tuned_lm_l1_model_fit,
+    new_data = data_test %>% select(-y)
+  ),
+  data_test %>% select(y)
+)
+
+lm_metrics(lm_l1_tuned_test_res, truth = y, estimate = .pred)
+```
+
+## Final Exercise: Ames housing data analysis
+
+Now you have all of the tools you need to undertake a full analysis of the Ames
+housing data set. Use what you've learned to:
+
+1. Fit two or more models on the Ames housing data using the CV portion of the
+training set. You should tune a hyperparameter for at least one of the models.
+2. Choose the better of your two models on the validation set (**Hint**: use the
+function `fit_resamples()` from the `tune` package when working with the result
+of `validation_split()`).
+3. Evaluate your best model on the test set and report the final estimate of
+   future error.
+
+```{r final-exercise}
+# write your code here
+
+# create a hyperparameter grid for number of trees to grow and number of random
+# covariates to select at each split
+rf_hyperparam_grid <- expand.grid(trees = c(100, 500),
+                                  mtry = c(2, 4))
+
+# can use tune() directly as args to the model
+rf_tune_model <- rand_forest(trees = tune(),
+                             mtry = tune()) %>%
+    set_engine("ranger") %>%
+    set_mode("regression")
+
+# make the workflow with the tuning model
+rf_workflow <- workflow() %>%
+  add_recipe(ames_base_recipe) %>%
+  add_model(rf_tune_model)
+
+# run CV
+rf_tuned <- tune_grid(rf_workflow,
+                      resamples = ames_cv,
+                      grid = rf_hyperparam_grid,
+                      metrics = metric_set(rmse))
+
+# get the mean CV metrics
+rf_tuned_metrics <- rf_tuned %>% collect_metrics()
+
+# select the best hyperparam combo
+rf_hyperparams <- rf_tuned_metrics %>%
+  slice_min(order_by = mean, n = 1, with_ties = FALSE) %>%
+  select(trees, mtry)
+
+# refit random forest with the best hyperparams and evaluate on the validation set
+rf_tuned_workflow <- rf_workflow %>%
+  update_model(
+    rf_tune_model %>%
+      set_args(trees = rf_hyperparams %>% pull(trees),
+               mtry = rf_hyperparams %>% pull(mtry))
+  )
+
+# fit_resamples handles refitting on the training portion of val_set and
+# evaluates on the validation portion
+rf_validate <- rf_tuned_workflow %>%
+  fit_resamples(val_set)
+
+# fit a linear model; no need for CV + hyperparam tuning
+lm_validate <- ames_lm_workflow %>%
+  fit_resamples(val_set)
+
+# take a look at validation metrics for lm
+lm_validate %>%
+  collect_metrics()
+
+# and the same for random forest
+rf_validate %>%
+  collect_metrics()
+
+# refit random forest and evaluate on the test set
+rf_test_preds <- bind_cols(
+  rf_tuned_workflow %>%
+    fit(ames_train) %>%
+    predict(new_data = ames_test),
+  ames_test %>% select(Sale_Price)
+)
+
+# get the test error
+rf_test_preds %>%
+  lm_metrics(truth = Sale_Price, estimate = .pred)
+
+# plot the predictions vs. true price (on original scale)
+# a few large errors, especially at the higher end, but overall looks good
+ggplot(rf_test_preds) +
+  geom_point(aes(x = 10^Sale_Price, y = 10^.pred), alpha = 0.7) +
+  geom_abline(slope = 1) +
+  labs(x = "True Sale Price (US$)", y = "RF Prediction")
+
+```
+
+## References
+
+- [Tidy Modeling with R](https://www.tmwr.org/) (book co-authored by Max Kuhn and Julie Silge)
+- [Tidymodels: tidy machine learning in R](http://www.rebeccabarter.com/blog/2020-03-25_machine_learning/) (another good tutorial to check out by Rebecca Barter)
+- [rsample "Basics" vignette](https://cran.r-project.org/web/packages/rsample/vignettes/Basics.html)
